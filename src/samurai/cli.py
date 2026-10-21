@@ -13,6 +13,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from .ensemble import load_config as load_ensemble_config
+from .ensemble import run_ensemble
 from .quadmask import build_sequence
 from .sam31 import SegmentationPrompt, segment_video
 from .void import execute, load_config
@@ -71,6 +73,7 @@ def _doctor(args: argparse.Namespace) -> int:
             sam3_import_error = f"{type(error).__name__}: {error}"
     checkpoint = os.environ.get("SAMURAI_SAM31_CHECKPOINT")
     void_root = os.environ.get("SAMURAI_VOID_ROOT")
+    aimlapi_key = os.environ.get("AIMLAPI_KEY")
     checks = {
         "ffmpeg": shutil.which("ffmpeg") is not None,
         "ffprobe": shutil.which("ffprobe") is not None,
@@ -86,6 +89,7 @@ def _doctor(args: argparse.Namespace) -> int:
         "void_reference_exists": bool(
             void_root and (Path(void_root) / "inference/cogvideox_fun/predict_v2v.py").is_file()
         ),
+        "aimlapi_key_configured": bool(aimlapi_key),
     }
     _emit({"checks": checks, "strict": args.strict})
     required = (
@@ -126,7 +130,10 @@ def _segment(args: argparse.Namespace) -> int:
         use_fa3=args.use_fa3,
         max_num_objects=args.max_objects,
     )
-    result = segment_video(predictor, args.video, prompt, args.output)
+    if args.scores_output:
+        result = segment_video(predictor, args.video, prompt, args.output, args.scores_output)
+    else:
+        result = segment_video(predictor, args.video, prompt, args.output)
     _emit(result)
     return 0
 
@@ -140,6 +147,13 @@ def _quadmask(args: argparse.Namespace) -> int:
         sequence_dir=args.sequence_dir,
     )
     _emit(result.__dict__)
+    return 0
+
+
+def _ensemble(args: argparse.Namespace) -> int:
+    config = load_ensemble_config(args.config)
+    result = run_ensemble(config, args.output, args.report)
+    _emit(result)
     return 0
 
 
@@ -168,6 +182,11 @@ def parser() -> argparse.ArgumentParser:
     segment.add_argument("--box", type=_box, action="append", help="absolute X1,Y1,X2,Y2 box")
     segment.add_argument("--frame-index", type=int, default=0)
     segment.add_argument("--output", type=Path, required=True)
+    segment.add_argument(
+        "--scores-output",
+        type=Path,
+        help="optional .npy probability support tensor for expert fusion",
+    )
     segment.add_argument("--checkpoint", help="local sam3.1_multiplex.pt path")
     segment.add_argument("--compile", action="store_true")
     segment.add_argument("--use-fa3", action="store_true")
@@ -181,6 +200,14 @@ def parser() -> argparse.ArgumentParser:
     quadmask.add_argument("--background-prompt", required=True)
     quadmask.add_argument("--sequence-dir", type=Path, required=True)
     quadmask.set_defaults(handler=_quadmask)
+
+    ensemble = subparsers.add_parser(
+        "ensemble", help="fuse multi-model mask tensors into one mask video"
+    )
+    ensemble.add_argument("--config", type=Path, required=True)
+    ensemble.add_argument("--output", type=Path, required=True)
+    ensemble.add_argument("--report", type=Path, required=True)
+    ensemble.set_defaults(handler=_ensemble)
 
     void = subparsers.add_parser("void", help="execute Netflix VOID passes")
     void.add_argument("--config", type=Path, required=True)

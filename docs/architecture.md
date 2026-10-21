@@ -4,10 +4,11 @@
 
 Correctness and reproducibility outrank model novelty, which outranks throughput.
 The repository therefore separates a small auditable execution boundary from
-immutable heavyweight model systems: samurai owns prompts, mask semantics,
-sequence validation, receipts, and subprocess boundaries; SAM 3.1 and Netflix
-VOID own their model code and weights. A new research idea enters as a pinned
-source revision plus an executable contract, not as a copy of undocumented code.
+immutable heavyweight model systems: samurai owns prompt contracts, numerical
+expert fusion, mask semantics, sequence validation, receipts, and subprocess
+boundaries; external model APIs and Netflix VOID own their model code, weights,
+and API behavior. A new research idea enters as a pinned source or model
+identity plus an executable contract, not as a copy of undocumented code.
 
 ## Ownership
 
@@ -16,6 +17,8 @@ source revision plus an executable contract, not as a copy of undocumented code.
 | User surface | `src/samurai/cli.py` | JSON results, explicit exit codes, no secret output |
 | SAM 3.1 adapter | `src/samurai/sam31.py` | Absolute prompts normalized to request API; complete forward-frame mask video |
 | Media/mask encoding | `src/samurai/media.py`, `src/samurai/quadmask.py` | Lossless gray yuv444p and exact VOID four-value semantics |
+| Expert fusion | `src/samurai/ensemble.py` | Aligned tensors, temperature scaling, dynamic weights, support, top-k, bounded batches |
+| Multimodal adapters | `scripts/aimlapi_expert.py` | One request per frame batch; normalized coordinate JSON only |
 | VOID execution | `src/samurai/void.py` | Sequence validation, Pass 1 command, optional Pass 2 command |
 | Verification | `scripts/check_*.py`, `scripts/tests/` | One check domain per script and stale-receipt-safe receipts |
 | Historical code | `third_party/` | Read-only SAM 2/SAMURAI observation, never imported |
@@ -34,6 +37,10 @@ Source-verified facts that shape the implementation:
   `build_sam2_video_predictor`, `init_state`, and `add_new_points_or_box`.
 - SAM 3.1 point and box prompts use normalized coordinates. Boxes use
   normalized XYWH at the request boundary.
+- The public SAM 3.1 video response exposes binary masks and per-object
+  probabilities, not internal pixel logits. `samurai segment --scores-output`
+  therefore emits a probability-support tensor formed by multiplying each binary
+  mask by its object probability; it never claims calibrated boundary logits.
 - The public predictor requires Python 3.12+, PyTorch 2.7+ (the pinned setup
   uses 2.10), and a CUDA 12.6+ device.
 - VOID consumes a sequence directory containing `input_video.mp4`,
@@ -50,6 +57,8 @@ Source-verified facts that shape the implementation:
 | Canonical SAM 3.1 adapter and CLI | implemented | Source and local API contract tests; no CUDA model turn |
 | Primary-mask video generation | implemented/exercised against fake predictor | Real ffmpeg media round trips; no SAM checkpoint |
 | VOID quadmask sequence builder | implemented/exercised | Tiny local videos; no VOID model call |
+| Multi-model spatial ensemble | implemented/exercised with tensors and fake command experts | Real ffmpeg output; no external multimodal API or quality claim |
+| AIMLAPI coordinate adapter | implemented | Payload/parser tests only; no live API call |
 | VOID Pass 1/Pass 2 command orchestration | implemented | Path and command tests/dry run; no GPU run |
 | SAM 2/SAMURAI historical tree | classified as frozen observation | Moved under `third_party/`; canonical imports rejected by check |
 | SAM 3.1 live CUDA inference | proposed qualification | Requires compute host, access-approved checkpoint, artifact digest |
@@ -60,17 +69,20 @@ Source-verified facts that shape the implementation:
 1. Configure the SAM 3.1 lane: `just setup-sam31`, export
    `SAMURAI_SAM31_CHECKPOINT`, authenticate to the approved Hugging Face
    checkpoint repository, and run `samurai doctor --strict` on a CUDA host.
-2. Segment the primary object:
+2. Produce aligned expert tensors and run `samurai ensemble` with temperatures,
+   weights, minimum support, and spatial top-k settings, or use direct SAM 3.1
+   when a single anchor is sufficient.
+3. Segment the primary object directly when no ensemble is needed:
    `samurai segment VIDEO --text 'person' --output black-mask.mp4`.
    Point and absolute XYXY box prompts are also supported.
-3. Provide or generate an affected-region mask, then run `samurai quadmask`
+4. Provide or generate an affected-region mask, then run `samurai quadmask`
    with the source video, primary mask, affected mask, background prompt, and
    destination sequence directory.
-4. Configure a pinned VOID checkout and model paths from
+5. Configure a pinned VOID checkout and model paths from
    `configs/void.example.json`; validate first with `samurai void --dry-run`.
-5. Run `samurai void` in the VOID environment. Pass 2 runs only when its
+6. Run `samurai void` in the VOID environment. Pass 2 runs only when its
    checkpoint is configured.
-6. Digest and retain the source video, mask videos, output videos, command,
+7. Digest and retain the source video, mask videos, output videos, command,
    model revision/checkpoint digest, runtime, and non-claims in a dated receipt.
 
 ## Open choices
@@ -78,6 +90,8 @@ Source-verified facts that shape the implementation:
 | Topic | Current position | Decision gate |
 | --- | --- | --- |
 | Affected-region reasoning | User supplies affected mask; no VLM/GUI path | A reviewed model must produce calibrated `127` regions and beat a baseline on real interaction cases |
+| Dynamic expert weighting | Entropy confidence by default | Promote another estimator only with real interaction-case calibration and quality evidence |
+| AIMLAPI model panel | MiMo V2.5, Gemini 3.8 Flash, and Dola Seed 2.0 Pro examples | A live run must pin served model identity and retain sanitized structured responses |
 | SAM 3.1 FlashAttention 3 | Disabled by default for portability | Enable only after a CUDA A/B run proves correctness and speed with the pinned checkpoint |
 | VOID Pass 2 | Implemented command path, optional execution | Run only when temporal-consistency metrics justify the extra GPU pass |
 | Apple MPS route | Not claimed | Requires a source-reviewed SAM 3.1 MPS fork and live output equivalence |
@@ -89,15 +103,20 @@ Source-verified facts that shape the implementation:
 | --- | --- |
 | 1. Project scaffold | `just check` and `just quality` pass; work receipt records source and non-claims |
 | 2. SAM 3.1 CUDA qualification | Live doctor, one real prompt/video, complete mask video, checkpoint digest, timing |
-| 3. VOID sequence qualification | Real primary/affected masks pass validation and produce a lossless quadmask |
-| 4. VOID Pass 1 qualification | One real sequence, output video/digest, runtime and VRAM observation |
-| 5. Optional Pass 2 qualification | Same-sequence temporal metric and runtime comparison; no blanket quality claim |
+| 3. Expert-panel qualification | At least three real model identities, aligned tensor provenance, live fused mask, and disagreement report |
+| 4. VOID sequence qualification | Real primary/affected masks pass validation and produce a lossless quadmask |
+| 5. VOID Pass 1 qualification | One real sequence, output video/digest, runtime and VRAM observation |
+| 6. Optional Pass 2 qualification | Same-sequence temporal metric and runtime comparison; no blanket quality claim |
 
 ## Contracts to preserve
 
 - Canonical code never imports the frozen SAM 2 tree.
 - A model invocation receipt binds exact source/dependency/checkpoint identity.
 - Mask values and first-frame convention are compatibility boundaries.
+- Probability inputs pass through logit conversion before temperature scaling;
+  no expert is treated as a binary authority.
+- External multimodal text responses enter only after reproducible coordinate
+  rasterization.
 - Media transcodes are tests only; actual experiments never use synthetic
   media as substitute evidence.
 - External repositories stay fetch-only and immutable.
@@ -116,3 +135,15 @@ Source-verified facts that shape the implementation:
   Actions workflow. No SAM 3.1 checkpoint or VOID model execution is claimed.
 - Validation and worker outcomes are consolidated in
   [project setup evidence](../evidence/project-setup-2026-10-21.json).
+
+### 2026-10-21, spatial expert triangulation
+
+- Added weighted sigmoid fusion, per-frame entropy confidence, minimum expert
+  support, spatial top-k, and pixel-budgeted dynamic batching.
+- Added memory-mapped tensor experts and command experts that rasterize
+  normalized boxes or polygons into probability grids.
+- Added an opt-in AIMLAPI adapter using three native-multimodal examples:
+  Xiaomi MiMo V2.5, Google Gemini 3.8 Flash, and ByteDance Dola Seed 2.0 Pro.
+- Rebuilt the public entry point as a generic VOID+Model toolkit. Local tests
+  use synthetic tensors, fake command experts, and real ffmpeg encoding; no
+  external API or model-quality claim is made.

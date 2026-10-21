@@ -22,6 +22,7 @@
 | Any source/docs/config change | `just check`, `just quality` | Rerun both after combined changes |
 | CLI adapter only | `just quality` plus focused pytest test | Full check still gates integration |
 | Mask/media semantics | `just quality` plus a real ffmpeg round-trip test | A fake predictor never proves encoding |
+| Expert fusion math | `just quality` plus aligned-tensor tests | API adapters and synthetic tensors never prove model quality |
 | SAM 3.1 execution claim | `samurai doctor --strict` and one real CUDA run | Source tests never substitute |
 | VOID execution claim | Validated real sequence and output digest/duration | Dry run never substitutes |
 

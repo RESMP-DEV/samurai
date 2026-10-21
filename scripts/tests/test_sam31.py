@@ -22,6 +22,7 @@ class FakePredictor:
                 "outputs": {
                     "out_binary_masks": np.zeros((1, 4, 6), dtype=bool),
                     "out_obj_ids": np.array([0]),
+                    "out_probs": np.array([0.75], dtype=np.float32),
                 },
             }
 
@@ -44,13 +45,27 @@ def test_segment_video_writes_all_frames_and_closes_session(tmp_path):
     video = tmp_path / "video.mp4"
     write_gray_video([np.zeros((4, 6), dtype=np.uint8) for _ in range(2)], video, fps=10)
     predictor = FakePredictor()
-    result = segment_video(
-        predictor,
-        video,
-        SegmentationPrompt(frame_index=0, text="cup"),
-        tmp_path / "mask.mp4",
-    )
+    prompt = SegmentationPrompt(frame_index=0, text="cup")
+    result = segment_video(predictor, video, prompt, tmp_path / "mask.mp4")
     assert result["frames"] == 2
     assert result["model_version"] == "sam3.1"
     assert (tmp_path / "mask.mp4").is_file()
     assert predictor.requests[-1]["type"] == "close_session"
+
+
+def test_segment_video_can_emit_probability_support_tensor(tmp_path):
+    video = tmp_path / "video.mp4"
+    write_gray_video([np.zeros((4, 6), dtype=np.uint8) for _ in range(2)], video, fps=10)
+    predictor = FakePredictor()
+    prompt = SegmentationPrompt(frame_index=0, text="cup")
+    result = segment_video(
+        predictor,
+        video,
+        prompt,
+        tmp_path / "mask.mp4",
+        tmp_path / "scores.npy",
+    )
+    scores = np.load(tmp_path / "scores.npy")
+    assert scores.shape == (2, 4, 6)
+    assert scores.dtype == np.float32
+    assert result["scores_semantics"].startswith("per-pixel object probability")

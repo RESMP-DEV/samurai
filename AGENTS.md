@@ -2,13 +2,13 @@
 
 ## Purpose and scope
 
-`samurai` is the RESMP-DEV execution repository for SAM 3.1 promptable video
-segmentation and Netflix VOID interaction-aware video removal. The canonical
-runtime is the `samurai` CLI: it writes primary masks, combines primary and
-affected masks into VOID quadmask sequences, and invokes a separately pinned
-Netflix VOID checkout. Research execution belongs here; vendored SAM 2 and
-upstream SAMURAI material under `third_party/` is frozen comparison material,
-not an import target or product path.
+`samurai` is the RESMP-DEV VOID+Model execution repository. The canonical
+runtime fuses aligned mask probability/logit tensors from multiple experts,
+writes primary and affected masks, combines them into VOID quadmask sequences,
+and invokes a separately pinned Netflix VOID checkout. SAM 3.1 is the default
+anchor, not a hard-coded authority. Research execution belongs here; vendored
+SAM 2 and upstream SAMURAI material under `third_party/` is frozen comparison
+material, not an import target or product path.
 
 `AGENTS.md` is the only instruction file. `CLAUDE.md` is a relative symlink to
 it. Preserve the upstream fetch-only remote policy and never create GitHub
@@ -22,6 +22,16 @@ Actions workflows or publish through an external upstream.
   `qp=0`. Do not use chroma-subsampled mask encodings.
 - Preserve the VOID quadmask values exactly: `0` remove, `63` overlap, `127`
   affected, `255` keep. The first frame clears affected-only pixels.
+- Treat expert fusion as a numerical contract: probability inputs are converted
+  to logits before temperature scaling; weights are normalized; dynamic weights
+  are recorded per frame; and tensor dimensions/frame counts must align exactly.
+- Keep spatial fusion bounded. Batch size is reduced according to frame pixels
+  and `max_batch_pixels`; command experts receive only the current batch; output
+  masks are written incrementally.
+- Native multimodal text APIs are not mask models. A command adapter must return
+  normalized box/polygon coordinates and confidence values, which samurai
+  rasterizes into probability grids before fusion. Never present adapter prose
+  as calibrated pixels.
 - Treat SAM 3.1 and VOID as separate execution lanes. SAM 3.1 uses Python
   3.12, PyTorch 2.10/CUDA 12.6+ and Meta's SAM License; VOID pins its own
   PyTorch 2.7.1 environment in its reference checkout. Do not force them into
@@ -61,6 +71,8 @@ its own checkout according to that pinned revision. Never use pip directly.
 | Area | Owner | Boundary |
 | --- | --- | --- |
 | CLI and model adapters | `src/samurai/` | Prompt contracts, video I/O, errors |
+| Expert fusion | `src/samurai/ensemble.py` | Weighted sigmoid field, dynamic weights, support, top-k, batching |
+| AIMLAPI expert adapter | `scripts/aimlapi_expert.py` | Frame-batch request/response and coordinate-region contract |
 | Verification | `scripts/` | Check domains, tests, receipt format |
 | Runtime examples | `configs/` | Portable examples only, no private paths |
 | Canonical plan/status | `docs/architecture.md` | One architecture and work log |

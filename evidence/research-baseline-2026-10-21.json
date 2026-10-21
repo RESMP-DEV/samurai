@@ -50,6 +50,24 @@
       "url": "https://github.com/dheerapat/sam3-cli",
       "revision": "repository HEAD 4fd6fdad0742387392518d2dcf887dd4d45011b3",
       "observed": "Public README through Exa"
+    },
+    {
+      "name": "AIMLAPI Xiaomi MiMo V2.5",
+      "url": "https://aimlapi.com/models/mimo-v2-5",
+      "revision": "public page queried 2026-10-21",
+      "observed": "Model ID xiaomi/mimo-v2.5; AIMLAPI technical page documents image/text endpoint input and text output, while Xiaomi describes the model family as native text/image/video/audio"
+    },
+    {
+      "name": "AIMLAPI Google Gemini 3.8 Flash",
+      "url": "https://aimlapi.com/models/gemini-3-8-flash",
+      "revision": "public page queried 2026-10-21",
+      "observed": "Model ID google/gemini-3.8-flash; image and text input, text output"
+    },
+    {
+      "name": "AIMLAPI ByteDance Dola Seed 2.0 Pro",
+      "url": "https://docs.aimlapi.com/api-references/text-models-llm/bytedance/dola-seed-2.0-pro",
+      "revision": "public documentation queried 2026-10-21",
+      "observed": "Model ID bytedance/dola-seed-2-0-pro; text/image/video input, text output"
     }
   ],
   "verified_facts": [
@@ -75,7 +93,8 @@
     "Borrow explicit text/point CLI and persisted-mask workflow patterns from the surveyed SAM 3.1 repositories, but retain the official request predictor rather than a frame-by-frame image API.",
     "Avoid the surveyed frame-by-frame video mode that explicitly retains no prior-frame object state; it is unsuitable for mask tracking.",
     "Treat independent multiplex explanations as corroboration only; Meta's pinned source remains the implementation authority.",
-    "Add setuptools<81, einops, and Linux-marked triton to samurai's sam31 extra; retain a doctor importability check so an installed-but-broken lane cannot be mistaken for readiness."
+    "Add setuptools<81, einops, and Linux-marked triton to samurai's sam31 extra; retain a doctor importability check so an installed-but-broken lane cannot be mistaken for readiness.",
+    "Use MiMo, Gemini Flash, and Dola Seed as interchangeable native-multimodal expert examples, but require an adapter because all three return text rather than calibrated pixel tensors."
   ],
   "non_claims": [
     "No SAM 3.1 checkpoint was downloaded or executed.",
