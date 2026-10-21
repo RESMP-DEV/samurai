@@ -1,0 +1,84 @@
+{
+  "recorded_at": "2026-10-21T16:00:30-07:00",
+  "agent": "Codex",
+  "validated_revision": "3d09e0810ee11f8348c04ab3f7950b33a3cb9a75",
+  "base_revision": "76ba195984892b0d1e3db5d9c9f90bb62175680a",
+  "platform": {
+    "system": "macOS",
+    "machine": "arm64",
+    "python": "3.12.15",
+    "uv": "0.13.1",
+    "ffmpeg": "9.0.2",
+    "ruff": "0.17.1",
+    "ty": "0.0.89"
+  },
+  "changes": [
+    "Added lapis-style AGENTS, README, CONTRIBUTING, architecture/status, justfile, uv packaging, tests, and receipt checks.",
+    "Added the samurai CLI with SAM 3.1 prompt adaptation, complete forward-frame mask generation, lossless media encoding, VOID quadmask construction, and VOID Pass 1/Pass 2 orchestration.",
+    "Pinned SAM 3 at 7f473cfd983d5eb43040ff608f66bff0d7bdcb53 and Netflix VOID at e3914f8f551dd4b880661991fd6b28cd1699a97a.",
+    "Moved inherited SAM 2 and legacy SAMURAI material under third_party as frozen observation and removed the inherited Actions workflow and tracked .DS_Store.",
+    "Added a separate pinned VOID setup lane and kept SAM 3.1 and VOID dependency lanes separate."
+  ],
+  "verification": [
+    {
+      "command": "just check",
+      "exit_code": 0,
+      "result": "instruction, workflow, and canonical SAM-2-import contracts passed"
+    },
+    {
+      "command": "just quality",
+      "exit_code": 0,
+      "result": "ruff, format, shellcheck, ty, and pytest passed; pytest exercised real ffmpeg media round trips"
+    },
+    {"command": "uv lock --check", "exit_code": 0, "result": "61-package lock consistent"},
+    {
+      "command": "uv build",
+      "exit_code": 0,
+      "result": "source distribution and wheel built; wheel sha256 b021353b66c258b7483a3ecdc484738eeb684b08c029f8cd435a66280ce30e90"
+    },
+    {
+      "command": "uv sync --extra sam31",
+      "exit_code": 0,
+      "result": "installed torch 2.10.0 and pinned sam3 0.1.0 from Git"
+    },
+    {
+      "command": "uv run samurai doctor",
+      "exit_code": 0,
+      "result": "ffmpeg/ffprobe true, torch 2.10 installed, sam3 distribution installed, but full sam3 import is false on this Mac with ModuleNotFoundError for Linux-only triton"
+    },
+    {
+      "command": "uv tree --python-platform x86_64-unknown-linux-gnu",
+      "exit_code": 0,
+      "result": "sam31 extra resolves sam3, torch 2.10, einops, setuptools 80.10.2, and triton 3.6.0 on Linux"
+    }
+  ],
+  "worker_evidence": {
+    "local_inventory": {
+      "outcome": "completed",
+      "run_dir": "/Users/kearm/.cache/ccr-worker-runs/20261021-152403-azizkk2q",
+      "use": "classified legacy material and found no checkpoints, hard-coded CUDA/CWD paths, and a prohibited inherited workflow"
+    },
+    "sam31_research": {
+      "outcome": "failed_after_partial_research",
+      "error": "all four CCR backend tiers failed after repeated attempts",
+      "fallback": "parent directly inspected pinned Meta source, model card, request API, notebook, and similar public repositories"
+    },
+    "void_research": {
+      "outcome": "failed_after_partial_research",
+      "error": "all four CCR backend tiers failed after repeated attempts",
+      "fallback": "parent directly cloned and inspected pinned Netflix VOID source, README, requirements, mask pipeline, and Pass 1/Pass 2 scripts"
+    }
+  },
+  "non_claims": [
+    "No SAM 3.1 checkpoint was downloaded or executed.",
+    "No Netflix VOID/CogVideoX checkpoint was downloaded or executed.",
+    "No CUDA device or GPU inference was claimed; this Mac lacks a matching Triton wheel and CUDA.",
+    "The VOID setup script was shellchecked but not executed because it would clone and install a separate heavy environment.",
+    "Local tiny synthetic media proves media and command contracts only; it is not model-quality evidence.",
+    "No claim is made that affected-region reasoning is automated; the current CLI consumes a supplied affected mask."
+  ],
+  "ignored_machine_receipts": [
+    "build/reports/setup/receipt.json",
+    "build/reports/quality/receipt.json"
+  ]
+}

@@ -114,3 +114,5 @@ Source-verified facts that shape the implementation:
 - Added instruction, setup-contract, quality, receipt, and focused tests.
 - Recorded the source research baseline and removed the inherited GitHub
   Actions workflow. No SAM 3.1 checkpoint or VOID model execution is claimed.
+- Validation and worker outcomes are consolidated in
+  [project setup evidence](../evidence/project-setup-2026-10-21.json).
