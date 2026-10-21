@@ -1,0 +1,79 @@
+{
+  "recorded_at": "2026-10-21T16:38:30-07:00",
+  "agent": "Codex",
+  "validated_revision": "1a48bfcdc639eb5bfb97003b251cb0c20e99e322",
+  "base_revision": "b93dd2629b30f986461dc25fe64c84c73b91baf9",
+  "platform": {
+    "system": "macOS",
+    "machine": "arm64",
+    "python": "3.12.15",
+    "uv": "0.13.1",
+    "ffmpeg": "9.0.2"
+  },
+  "implementation": [
+    "Added a pure NumPy expert-fusion core for aligned tensors shaped experts, frames, height, width.",
+    "Probability inputs are converted to logits before model-specific temperature scaling and sigmoid fusion.",
+    "Base weights are normalized and entropy confidence produces per-frame dynamic weights that are retained in the report.",
+    "Added minimum-expert support, deterministic spatial top-k selection, and an inclusive threshold alternative.",
+    "Added memory-mapped tensor experts and command experts that validate/rasterize normalized boxes or polygons into probability grids.",
+    "Added pixel-budgeted dynamic batching and incremental lossless mask-video writing.",
+    "Extended SAM 3.1 direct segmentation with an optional probability-support tensor derived from public binary masks and per-object probabilities; it does not claim internal pixel logits.",
+    "Added an opt-in AIMLAPI adapter for frame batches and three example native-multimodal experts: xiaomi/mimo-v2.5, google/gemini-3-8-flash, and bytedance/dola-seed-2-0-pro.",
+    "Reformatted README as the entry point for the generic VOID+Model toolkit and updated architecture, instructions, and contribution contracts."
+  ],
+  "verification": [
+    {"command": "just check", "exit_code": 0, "result": "instruction/workflow/canonical-import contracts passed"},
+    {
+      "command": "just quality",
+      "exit_code": 0,
+      "result": "ruff, format, shellcheck, ty, and 23 pytest tests passed"
+    },
+    {"command": "uv lock --check", "exit_code": 0, "result": "61-package lock consistent"},
+    {
+      "command": "uv build",
+      "exit_code": 0,
+      "result": "source distribution and wheel built; wheel sha256 94244c534c791ca60b782a20662618c95b651a45848193678fec48469b61110c"
+    },
+    {
+      "command": "uv run samurai ensemble --config build/demo-ensemble/config.json --output build/demo-ensemble/mask.mp4 --report build/demo-ensemble/report.json",
+      "exit_code": 0,
+      "result": "two-frame, 10x8 CLI fixture emitted a lossless mask and JSON report; mask sha256 e17f7ade23cebe5e2ce765e977850f385173ce821fc3e7db906e419c76c6d71d"
+    },
+    {
+      "command": "ffprobe -count_frames build/demo-ensemble/mask.mp4",
+      "exit_code": 0,
+      "result": "decoded exactly two frames at 10x8"
+    },
+    {
+      "command": "uv run samurai doctor",
+      "exit_code": 0,
+      "result": "base lane reports ffmpeg/ffprobe true and AIMLAPI key false without exposing a secret"
+    }
+  ],
+  "worker_evidence": {
+    "integration_review": {
+      "outcome": "completed",
+      "run_dir": "/Users/kearm/.cache/ccr-worker-runs/20261021-161328-_gg78omm",
+      "use": "confirmed pure fusion seam, exact alignment/frame checks, probability-domain pitfalls, and no full-video resident tensor"
+    },
+    "native_model_research": {
+      "outcome": "failed_after_partial_research",
+      "error": "all five CCR backend tiers failed after repeated attempts",
+      "fallback": "parent used AIMLAPI public pages through Exa for MiMo, Gemini Flash, and Dola Seed model identities and input contracts"
+    }
+  },
+  "non_claims": [
+    "No AIMLAPI request was sent and no AIMLAPI key was present.",
+    "No SAM 3.1 checkpoint or CUDA inference was run.",
+    "No Netflix VOID, CogVideoX, or expert-panel quality metric was run.",
+    "The local ensemble fixture uses synthetic tensors and real ffmpeg encoding; it is not final experiment evidence.",
+    "SAM 3.1's public response does not expose internal pixel logits; --scores-output is explicitly object-probability support over binary masks.",
+    "Dynamic entropy weighting is implemented and exercised numerically, but it is not calibrated against real interaction cases."
+  ],
+  "ignored_machine_artifacts": [
+    "build/reports/setup/receipt.json",
+    "build/reports/quality/receipt.json",
+    "build/demo-ensemble/mask.mp4",
+    "build/demo-ensemble/report.json"
+  ]
+}

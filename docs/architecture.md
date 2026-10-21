@@ -147,3 +147,5 @@ Source-verified facts that shape the implementation:
 - Rebuilt the public entry point as a generic VOID+Model toolkit. Local tests
   use synthetic tensors, fake command experts, and real ffmpeg encoding; no
   external API or model-quality claim is made.
+- Validation and worker outcomes are consolidated in
+  [spatial expert ensemble evidence](../evidence/spatial-expert-ensemble-2026-10-21.json).
