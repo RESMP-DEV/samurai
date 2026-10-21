@@ -164,3 +164,10 @@ visualization/*
 
 # For Testing
 demo/
+
+# Repository-local machine state and agent work areas
+.worktrees/
+.sindexer/
+.samurai-worker-research/
+runtime/
+checkpoints/

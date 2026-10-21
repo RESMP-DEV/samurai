@@ -1,0 +1,86 @@
+{
+  "recorded_at": "2026-10-21T15:40:00-07:00",
+  "agent": "Codex",
+  "purpose": "Pin the SAM 3.1 and Netflix VOID research basis used by the initial project setup.",
+  "sources": [
+    {
+      "name": "Meta SAM 3 repository",
+      "url": "https://github.com/facebookresearch/sam3",
+      "revision": "7f473cfd983d5eb43040ff608f66bff0d7bdcb53",
+      "observed": "Live shallow clone and source inspection"
+    },
+    {
+      "name": "Meta SAM 3.1 checkpoints",
+      "url": "https://huggingface.co/facebook/sam3.1",
+      "revision": "repository snapshot queried 2026-10-21",
+      "observed": "Public model page through Exa"
+    },
+    {
+      "name": "Netflix VOID repository",
+      "url": "https://github.com/Netflix/void-model",
+      "revision": "e3914f8f551dd4b880661991fd6b28cd1699a97a",
+      "observed": "Live shallow clone and source inspection"
+    },
+    {
+      "name": "ailia SAM 3.1 execution example",
+      "url": "https://github.com/ailia-ai/ailia-models/blob/master/image_segmentation/segment-anything-3.1/README.md",
+      "revision": "repository HEAD 081c3b4b68906631092ada5cc9a42aaedd687bff",
+      "observed": "Public README through Exa"
+    },
+    {
+      "name": "SAM 3.1 conveyor counting pipeline",
+      "url": "https://github.com/sangjune20012-collab/conveyor-belt-video-counting",
+      "revision": "repository HEAD bffd402b04b76825e2bfcfaf87ca3756b3c31989",
+      "observed": "Public README through Exa"
+    },
+    {
+      "name": "Independent SAM 3.1 implementation notes",
+      "url": "https://github.com/heyoeyo/muggled_sam/blob/main/muggled_sam/v3p1_sam/README.md",
+      "revision": "repository HEAD a004ffc72bde75a8a4d64573e2add06e934f40a4",
+      "observed": "Public README through Exa"
+    },
+    {
+      "name": "SAM 3 inference and annotation CLI",
+      "url": "https://github.com/RizwanMunawar/sam3-inference",
+      "revision": "repository HEAD 280c4f6199e46282d20b71553cdc9158651d4432",
+      "observed": "Public README through Exa"
+    },
+    {
+      "name": "Minimal SAM 3 CLI",
+      "url": "https://github.com/dheerapat/sam3-cli",
+      "revision": "repository HEAD 4fd6fdad0742387392518d2dcf887dd4d45011b3",
+      "observed": "Public README through Exa"
+    }
+  ],
+  "verified_facts": [
+    "SAM 3.1 is the March 27, 2026 Object Multiplex release.",
+    "The recommended public builder is build_sam3_predictor(version='sam3.1').",
+    "SAM 3.1 predictors use handle_request and handle_stream_request rather than the SAM 2 init_state/add_new_points_or_box API.",
+    "Interactive points and boxes are normalized at the request boundary; boxes are XYWH.",
+    "The official SAM 3 setup requires Python 3.12+, PyTorch 2.7+, and CUDA 12.6+; the repository README's current exact example uses PyTorch 2.10.0.",
+    "SAM 3.1 propagation responses expose out_binary_masks for each returned frame.",
+    "Netflix VOID sequences contain input_video.mp4, quadmask_0.mp4, and prompt.json with a bg background description.",
+    "VOID quadmask values are 0 for remove, 63 for overlap, 127 for affected, and 255 for keep.",
+    "VOID mask generation clears affected-only grey pixels from frame zero.",
+    "VOID Pass 1 is base inpainting; Pass 2 uses Pass 1 output and warped-noise refinement.",
+    "VOID's reference requirements pin PyTorch 2.7.1, separate from the SAM 3.1 2.10-oriented setup.",
+    "The official SAM 3 runtime import path additionally requires pkg_resources, einops, and triton even though its project metadata does not declare them as base dependencies.",
+    "Triton publishes matching current wheels for Linux, not macOS; this Mac therefore cannot import the full CUDA-oriented SAM 3 model module."
+  ],
+  "implementation_decisions": [
+    "Keep SAM 3.1 and VOID in separate execution environments.",
+    "Pin SAM 3 code as a dependency rather than copying its custom-licensed source into this repository.",
+    "Keep the imported SAMURAI/SAM 2 tree as third_party frozen observation and reject canonical sam2 imports.",
+    "Use ffmpeg/libx264 with yuv444p and qp=0 for mask videos, matching the reference pipeline's lossless-value requirement.",
+    "Borrow explicit text/point CLI and persisted-mask workflow patterns from the surveyed SAM 3.1 repositories, but retain the official request predictor rather than a frame-by-frame image API.",
+    "Avoid the surveyed frame-by-frame video mode that explicitly retains no prior-frame object state; it is unsuitable for mask tracking.",
+    "Treat independent multiplex explanations as corroboration only; Meta's pinned source remains the implementation authority.",
+    "Add setuptools<81, einops, and Linux-marked triton to samurai's sam31 extra; retain a doctor importability check so an installed-but-broken lane cannot be mistaken for readiness."
+  ],
+  "non_claims": [
+    "No SAM 3.1 checkpoint was downloaded or executed.",
+    "No Netflix VOID checkpoint or CogVideoX base model was downloaded or executed.",
+    "No CUDA device was claimed or qualified.",
+    "The similar-repository survey is research context, not an endorsement or integration of every surveyed project."
+  ]
+}
