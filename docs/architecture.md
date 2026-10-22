@@ -398,3 +398,47 @@ Source-verified facts that shape the implementation:
 - Full findings, source anchors, refreshed external pages, live host observations,
   and non-claims are consolidated in
   [fusion and efficiency evidence](../evidence/fusion-mask-transform-quantization-offload-2026-10-22.json).
+
+### 2026-10-22, SAM 3.1 conditioning and VOID benchmark study
+
+- Verified the released SAM 3.1 multiplex request surface: text, points, boxes,
+  object removal, and point correction are available, but direct binary-mask
+  conditioning is not. The wrapper rejects `add_mask` for SAM 3.1 multiplex, and
+  there is no native quadmask, boundary, or negative-space prompt. High-disagreement
+  evidence must therefore enter as a point/box prompt or through a new trained
+  adapter, not as a caller mask.
+- Found Netflix's own lower-risk affected-region precedent: original VOID used
+  the SAM 3 image model on VLM-selected affected nouns, gridified those masks,
+  and wrote the `127` channel. The next conditioning design is SAM 3.1 multiplex
+  for the primary anchor, the SAM 3 image lane for affected regions, and the
+  existing downstream intersection rule for `63` overlap.
+- Audited adaptation. The official trainer covers SAM 3 image fine-tuning and
+  binary mask/presence losses, while a ready SAM 3.1 multiplex video recipe and a
+  four-class semantic target do not exist. Widening SAM's one-channel semantic
+  head to four quadmask classes is possible only as a larger proposed change.
+- Verified official SAM benchmark surfaces: SA-Co/VEval with cgF1 and pHOTA,
+  SA-Co image sets, YTVIS/HOTA tooling, and speed/compile scripts. SAM 3.1's
+  publisher results include SA-V `30.5/58.7` cgF1/pHOTA and YT-Temporal-1B
+  `52.9/70.7`. The SA-V and YT VEval domains are CC-BY-NC 4.0, so they are
+  internal evaluation only, not client-model training data.
+- Established that VOID's paper benchmark exists but the checkout does not ship a
+  runnable benchmark. The paper used 75 real videos with human/VLM judging and a
+  40-video paired synthetic set with PSNR, LPIPS, DreamSim, DINOv2, FVD, and a
+  reference-aware VLM judge. The local benchmark should instead start with
+  mask-only per-class IoU/Dice, boundary F1, flicker, and class-transition
+  stability on the seven cached sequences, then generate held-out Kubric
+  counterfactual pairs for full inpainting metrics.
+- Defined the supervised VOID row as `rgb_full.mp4`, `rgb_removed.mp4`, exact
+  four-value `mask.mp4`, metadata, and an optional Pass 2 warped-noise tensor.
+  Quantization calibration adds sequence-level splits, media/prompt digests,
+  timestep and CFG-branch coverage, and per-tensor/per-channel/block-16 activation
+  statistics.
+- Kept mixed precision deliberately non-uniform: T5 first, selective SAM
+  INT8/W8A8 or FP8 second, VOID DiT FP8 before NVFP4 W4A4, and the CogVideoX VAE
+  in BF16. B550's RTX 3090 Ti cards are compute capability 8.6 and have no FP8
+  tensor cores; Strix is compute capability 12.0 but each pinned environment still
+  needs a live kernel probe. INT8 weight-only remains a compatibility/residency
+  option, not an acceleration claim.
+- Full conditioning, benchmark, calibration-corpus, hardware, quality-gate, and
+  non-claim details are consolidated in
+  [SAM conditioning and benchmark evidence](../evidence/sam31-conditioning-void-benchmark-mixed-precision-2026-10-22.json).

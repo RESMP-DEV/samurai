@@ -1,0 +1,277 @@
+{
+  "recorded_at": "2026-10-22T12:16:36-07:00",
+  "agent": "Codex main session with read-only MiniMax M3.1 Flash CCR workers",
+  "purpose": "Determine SAM 3.1 conditioning/adaptation options for VOID quadmask intake, define a measurable VOID benchmark, and choose mixed-precision and calibration strategy.",
+  "source": {
+    "revision": "97beb5e3bd35cd3b4ef113123dca081bcabf7eb1",
+    "dirty": false,
+    "sam3_path": "/Users/kearm/.cache/alphaheng/research/sam3",
+    "sam3_revision": "7f473cfd983d5eb43040ff608f66bff0d7bdcb53",
+    "void_path": "/Users/kearm/.cache/alphaheng/research/void-model",
+    "void_revision": "e3914f8f551dd4b880661991fd6b28cd1699a97a"
+  },
+  "terminology": {
+    "ensemble_calibration": "Label-free Dawid-Skene agreement calibration in samurai; it changes expert weights, never SAM or VOID weights.",
+    "quantization_calibration": "Representative activation/statistic collection for numeric formats; it does not teach new mask semantics.",
+    "supervised_fine_tuning": "Gradient training from paired masks or counterfactual target videos; this is the only option that changes model behavior."
+  },
+  "sam31_conditioning": {
+    "public_request_surface": {
+      "implemented": [
+        "start_session",
+        "add_prompt with text, positive/negative points, and positive/negative boxes",
+        "per-object point correction through add_sam2_new_points",
+        "remove_object",
+        "reset/cancel/close session",
+        "forward or bidirectional video propagation"
+      ],
+      "not_implemented_for_sam31_multiplex": [
+        "direct binary mask conditioning through add_mask; the wrapper probes for add_tracker_new_mask and SAM 3.1 multiplex does not expose it",
+        "a native four-channel quadmask prompt",
+        "a native boundary or uncertainty-ring prompt",
+        "a populated public image-exemplar embedding path; box prompts are the released visual-prompt surface"
+      ]
+    },
+    "void_semantics_mapping": {
+      "primary_0_and_overlap_63": "SAM 3.1 can track the primary object, but samurai currently OR-collapses multiple objects and max-collapses their scalar object probabilities; role-aware output preservation is still needed.",
+      "affected_127": "Netflix VOID itself used the SAM 3 image model for this lane: VLM-selected affected nouns are segmented, gridified, and proximity-filtered into the grey mask. Reusing that pattern is lower risk than forcing SAM 3.1 multiplex to emit all VOID classes.",
+      "overlap_63": "No native SAM output; compute downstream as primary intersect affected.",
+      "boundary": "No native prompt; derive from mask distance transforms or an added boundary expert.",
+      "keep_255": "Implicit complement; no negative-space prompt."
+    },
+    "recommended_conditioning_ladder": [
+      {
+        "state": "implementable_without_training",
+        "change": "Run SAM 3.1 multiplex as the primary dense anchor and the SAM 3 image model as the affected-region lane, then apply the existing quadmask intersection rule.",
+        "gate": "Full-video primary/affected per-class IoU and boundary F1 must beat the current text-box vision panel on held-out VOID samples."
+      },
+      {
+        "state": "implementable_without_training",
+        "change": "Preserve object IDs, per-object masks, and per-object scores; convert high-disagreement regions into point or box prompts rather than trying add_mask.",
+        "gate": "A/B no-escalation versus disagreement-escalated SAM 3.1 on the same frames."
+      },
+      {
+        "state": "implementable_with_sam3_image_training",
+        "change": "Fine-tune the SAM 3 image affected-region model on generated VOID-domain noun/mask pairs; keep SAM 3.1 multiplex frozen initially.",
+        "gate": "Held-out affected-region IoU and downstream VOID judge score must improve without losing negative prompts."
+      },
+      {
+        "state": "proposed_expensive",
+        "change": "Widen a SAM semantic head and training target to four quadmask classes.",
+        "gate": "This breaks the shipped one-channel semantic head and SAM 3.1 multiplex has no ready video fine-tune recipe; do not attempt before the prompt-role route is measured."
+      }
+    ],
+    "training_surface": {
+      "implemented": [
+        "Official Hydra trainer and SAM 3 image fine-tuning recipes for ODinW and Roboflow",
+        "Box, presence, binary mask focal/Dice, semantic-segmentation, and association losses",
+        "Local checkpoints can be loaded through checkpoint_path"
+      ],
+      "not_implemented": [
+        "A ready SAM 3.1 multiplex video fine-tuning recipe",
+        "Four-way quadmask semantic supervision",
+        "A known SAM 3.1 video LoRA path"
+      ],
+      "checkpoint_note": "A community SAM3 LoRA recipe exists for the image model and reports about 1.38 percent trainable parameters, but it explicitly does not support video fine-tuning and is not a samurai qualification."
+    },
+    "official_benchmarks": {
+      "available": [
+        "SA-Co/VEval video benchmark with YTVIS-like RLE masklets and positive/negative noun prompts",
+        "SA-Co/Gold and Silver image concept-segmentation benchmarks",
+        "cgF1, pHOTA/HOTA, precision/recall/F1, IL_MCC, positive micro/macro F1, and J&F evaluator code",
+        "measure_speed.py and bench_compile.py for synthetic production-shaped SAM speed measurements"
+      ],
+      "sam31_publisher_results": {
+        "SA_V_cgF1_pHOTA": [30.5, 58.7],
+        "YT_Temporal_1B_cgF1_pHOTA": [52.9, 70.7],
+        "SmartGlasses_cgF1_pHOTA": [36.3, 64.4],
+        "VOS_JF_examples": {
+          "MOSEv1": 79.6,
+          "DAVIS17": 92.7,
+          "SA_V": 83.8,
+          "MOSEv2": 62.3
+        }
+      },
+      "license_boundary": "SA-V and YT-Temporal-1B VEval domains are CC-BY-NC 4.0; use them for internal evaluation only, not as client-model training data."
+    }
+  },
+  "void_benchmark": {
+    "official_paper_protocol": {
+      "real_set": "75 real interaction videos with no counterfactual ground truth",
+      "real_evaluation": [
+        "25-participant preference study",
+        "three VLM judges",
+        "six 0-5 criteria: interaction/physics, object removal, background/artifacts, temporal consistency, preservation, and sharpness"
+      ],
+      "synthetic_set": "10 prior-work shadow/reflection cases plus 30 held-out Kubric/HUMOTO dynamic-interaction cases",
+      "synthetic_metrics": [
+        "PSNR",
+        "LPIPS",
+        "DreamSim",
+        "DINOv2",
+        "FVD",
+        "reference-aware VLM judge"
+      ],
+      "official_void_synthetic_result": {
+        "PSNR": 31.49,
+        "LPIPS": 0.1156,
+        "DreamSim": 0.0658,
+        "DINOv2": 0.9222,
+        "FVD": 260.31,
+        "VLM_judge": 25.1
+      },
+      "release_state": "The paper protocol is public, but the checkout releases only seven demo sequences, training-data generators, and training scripts; no runnable official benchmark dataset or evaluation harness was found."
+    },
+    "proposed_local_benchmark": {
+      "tier_0_mask_only": [
+        "Per-class IoU/Dice for primary, affected-only, overlap, keep, and non-keep union",
+        "Boundary IoU/F1 at 1-, 2-, and 4-pixel tolerances",
+        "Adjacent-frame mask flicker and class-transition instability",
+        "Per-frame and pooled precision/recall plus worst-frame and worst-sequence reports",
+        "Label-free expert disagreement and escalation rates"
+      ],
+      "tier_1_paired_synthetic": [
+        "Generate held-out Kubric counterfactual pairs locally using the official generator",
+        "Use PSNR/SSIM, LPIPS, DreamSim or DINOv2, and reference-aware VLM judges",
+        "Use FVD only on a sufficiently large generated corpus, not the seven demo clips",
+        "Score preservation outside keep, removal residual, and counterfactual motion correctness separately"
+      ],
+      "tier_2_real_no_reference": [
+        "Preservation outside keep via PSNR/SSIM/LPIPS/DINOv2 against the input",
+        "Removed-object residual with primary-mask and VLM checks",
+        "Optical-flow warp error, object identity stability, flicker, and temporal embedding drift",
+        "Blind multi-judge scores and occasional forced-choice human review"
+      ],
+      "tier_3_perturbation": [
+        "Dilate/erode primary and affected masks by 1/2/4 pixels",
+        "Feather boundaries and inject controlled class-confusion between 0, 63, and 127",
+        "Drop or jitter keyframes and temporal medians",
+        "Measure metric sensitivity and runtime/VRAM independently"
+      ],
+      "efficiency": [
+        "cold and warm end-to-end latency",
+        "Pass 1 and optional Pass 2 separately",
+        "steady and peak VRAM",
+        "host RAM and swap",
+        "output digest and deterministic-seed reproducibility"
+      ],
+      "local_status": [
+        "Seven aligned VOID demo masks are available for mask-only tests.",
+        "Three sequences contain explicit point-prompt metadata; ducky-float has prompt frames 7, 18, and 36.",
+        "The current base Python environment lacks lpips, torchmetrics, dreamsim, OpenCV, scikit-image, scipy, and transformers, so perceptual benchmark dependencies are not installed.",
+        "No benchmark script has been implemented or run."
+      ]
+    },
+    "training_and_quantization_corpus_format": {
+      "void_supervised_row": {
+        "directory": "sequence_name/",
+        "files": [
+          "rgb_full.mp4",
+          "rgb_removed.mp4",
+          "mask.mp4 with exact 0/63/127/255 values",
+          "metadata.json"
+        ],
+        "manifest_fields": [
+          "file_path",
+          "text background prompt",
+          "type=video_mask_tuple",
+          "optional warped_noise_path for Pass 2"
+        ]
+      },
+      "quantization_manifest_row": [
+        "sequence and split ID",
+        "input-video and quadmask SHA-256",
+        "background prompt and prompt embedding provenance",
+        "frame indices and resolution",
+        "pass and CFG branch",
+        "seed and sampled timestep bin",
+        "model/component revision"
+      ],
+      "activation_statistic_row": [
+        "module and operation path",
+        "input/output shape",
+        "statistic type: per-tensor, per-channel, or 16-element NVFP4 block scale",
+        "amax, trimmed amax, sample count, saturation rate, and outlier policy",
+        "timestep bin and frame/mask-class coverage",
+        "statistic artifact digest"
+      ],
+      "sampling_rule": "Split by sequence, never by frame. Cover all four quadmask classes, static and fast motion, camera motion, boundaries, early/high-noise and late/low-noise diffusion timesteps, conditional and unconditional CFG branches, and both VOID passes."
+    }
+  },
+  "mixed_precision": {
+    "live_hardware": {
+      "strix": {
+        "gpu": "RTX 5070 Laptop",
+        "compute_capability": 12.0,
+        "vram_mib": 8151,
+        "supports_fp8_and_fp4_kernels": "plausible and previously exercised with torch 2.14.1/CUDA 13.4; still must be probed in the pinned VOID environment"
+      },
+      "b550": {
+        "gpu": "two RTX 3090 Ti",
+        "compute_capability": 8.6,
+        "vram_mib_each": 24564,
+        "fp8_tensor_cores": false
+      }
+    },
+    "format_decision": {
+      "INT8_weight_only": {
+        "reason_to_choose": "Broad Ampere compatibility, simple activation-free calibration, and lower checkpoint residency.",
+        "reason_not_to_choose": "It dequantizes to BF16 before the GEMM in common paths, so it is primarily memory/storage, not speed."
+      },
+      "INT8_W8A8": {
+        "reason_to_choose": "Ampere tensor-core acceleration is possible; selective SAM ConvRot artifacts report real RTX 3090 speedups.",
+        "gate": "Requires supported kernels and real mask-quality validation; publisher spot checks are insufficient."
+      },
+      "FP8_W8A8_dynamic": {
+        "reason_to_choose": "Usually better accuracy than FP4 and useful weight residency on Blackwell.",
+        "measured_sm120_microbench": "Prior receipt measured only 1.12x for a SAM3 trunk shape, 0.92x for a CogVideoX projection, and 0.12x for latency-bound T5-XXL; FP8 is not automatically fast.",
+        "hardware_boundary": "Not a native tensor-core path on B550; the official CogVideo FP8 recipe also pins a newer TorchAO/H100-oriented software surface."
+      },
+      "NVFP4_W4A4": {
+        "reason_to_choose": "Only this measured path engaged native FP4 tensor cores and gave 5.4-7.4x GEMM speedups at SAM/VOID/T5 shapes.",
+        "quality_risk": "Layer-level thresholded-mask IoU was only 0.923-0.940; one activation outlier inflated static relative error to about 0.90 while trimmed calibration reduced it to about 0.43."
+      },
+      "VAE": {
+        "policy": "Keep BF16 initially.",
+        "reason": "The 215M-parameter VAE is only 0.43 GiB in BF16 and is convolution-heavy with non-16-divisible input/output channels; activation-only dynamic quantization can add casts without accelerating the convolution. Tiling/slicing and profiling come first."
+      }
+    },
+    "component_policy": [
+      "T5 encoder: qualify FP8 or INT8 first because it uses the stock transformers loader and is primarily a residency win.",
+      "SAM 3.1: on B550 use selective INT8/W8A8; on Strix compare BF16, hosted/prequantized FP8, and selective W8A8 while keeping embeddings, norms, geometry, convolutions, and sensitive heads high precision.",
+      "VOID DiT: first qualify FP8/W8A8 for quality and residency; only then build custom NVFP4 W4A4 with timestep-binned trimmed activation scales and a fused/low-rank outlier path.",
+      "VAE: BF16 plus tiling/slicing until profiling proves it is a bottleneck.",
+      "Fusion/calibration core: remains NumPy/BF16-scale probability logic and is not a model-quantization target."
+    ],
+    "quality_gates": [
+      "SAM: no pooled mask-IoU regression on the local VOID corpus, no per-sequence J&F regression, and no negative-prompt regression.",
+      "VOID synthetic paired set: report PSNR/SSIM, LPIPS/DreamSim/DINOv2, VLM judge, and FVD separately; a single LPIPS win is not acceptance.",
+      "VOID real set: preservation, residual removal, temporal stability, and judge criteria must all pass.",
+      "Efficiency: report median and p95 latency, peak/steady VRAM, host RAM, and output digest on fixed seeds.",
+      "No low-bit variant is accepted from GEMM error or publisher spot metrics alone."
+    ]
+  },
+  "worker_evidence": [
+    {
+      "report": "build/research/sam31-conditioning-benchmark-options.txt",
+      "outcome": "completed; parent verified the request API, add_mask limitation, one-channel semantic head, official evaluator paths, and benchmark figures against pinned source"
+    },
+    {
+      "report": "build/research/void-benchmark-options.txt",
+      "outcome": "stopped after 712.7 seconds during metric-package provenance over-exploration; parent independently fetched and verified the official paper protocol, local sample inventory, training-data schema, and missing metric dependencies"
+    },
+    {
+      "report": "build/research/mixed-precision-calibration-options.txt",
+      "outcome": "rejected because visible MiniMax control markers corrupted the report; parent independently completed the mixed-precision lane from the prior measured receipt, pinned source, public CogVideo/TorchAO pages, and live compute-capability probes"
+    }
+  ],
+  "non_claims": [
+    "No SAM or VOID checkpoint was downloaded, loaded, trained, quantized, or executed.",
+    "No official SA-Co or VOID benchmark dataset was downloaded or run.",
+    "No benchmark implementation, conditioning change, adapter, or quantizer was added in this study.",
+    "Official SAM and VOID metric values are publisher/paper results, not samurai reproductions.",
+    "FVD is inappropriate for the seven local demo sequences because the sample is too small.",
+    "FP8 and FP4 kernel availability must be probed inside each pinned environment; compute capability and prior microbenchmarks do not prove the VOID lane works.",
+    "CC-BY-NC benchmark domains are evaluation-only and must not become client-facing training data."
+  ]
+}
