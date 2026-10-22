@@ -349,3 +349,52 @@ Source-verified facts that shape the implementation:
 - Exact source anchors, upstream commit IDs, worker provenance, and non-claims
   are consolidated in
   [upstream multi-model provenance evidence](../evidence/upstream-multi-model-provenance-2026-10-22.json).
+
+### 2026-10-22, fusion, VOID transform, quantization, and offload study
+
+- Compared fusion policies on the retained three-family trampoline tensors. The
+  shipped unanimous-support gate reached IoU `0.4620` against the VOID reference,
+  above weighted fusion `0.4188`, the top-two capability intersection `0.4443`,
+  and global label-free selection `0.4029`; a per-frame reference oracle reached
+  only `0.4563` on this two-frame panel. The result is a mechanism observation,
+  not a general quality ranking.
+- Found an immediate policy defect: an expert below `support_threshold` casts no
+  support vote but still retains full weight in the average. Explicit abstention,
+  active-mass renormalization, and a mass floor are the first policy changes to
+  implement. Capability scalar weighting alone selected the same pixels in the
+  pilot.
+- Established the high-sensitivity design direction: one vote per lab lineage,
+  structured expert roles, capability-weighted quorum mass, high-disagreement
+  escalation, and a second-phase critic that sees prior masks and can confirm or
+  modify a candidate. No critic adapter contract or routing path exists yet.
+- Verified the exact samurai-to-VOID transform. VOID area-resizes and inverts the
+  quadmask, then Pass 1 hardcodes `use_trimask=True`: both `0` remove and `63`
+  overlap map to `1.0`, `127` affected maps near `0.498`, and keep maps to zero.
+  Pass 2 hardcodes `use_trimask=False`, so all non-keep classes become one binary
+  mask. Proposed temporal consensus, flow propagation, connected-component, and
+  per-class morphology/feathering transforms are not implemented.
+- Refreshed quantization precedents: CogVideo ships TorchAO INT8/FP8 examples;
+  Diffusers exposes TorchAO hooks; SVDQuant, QVGen, Q-VDiT, and DeltaQuant cover
+  W4A4, low-rank outliers, timestep/video-aware calibration, and QAT; hosted SAM
+  3.1 INT8/FP8/W4A4 artifacts already exist. These are external results, not
+  samurai qualifications.
+- Kept the quantization order conservative: qualify the stock-loader T5 encoder
+  first, validate a prequantized or hosted SAM 3.1 lane on real clips second,
+  and only then build a custom VOID DiT W4A4 path with timestep-aware activation
+  calibration. VOID's custom loaders bypass Diffusers hooks, its `qfloat8` mode
+  immediately returns to BF16, and its convolution-heavy VAE is a poor low-bit
+  GEMM candidate.
+- Audited RAM/VRAM offloading at pinned VOID `e3914f8`. Model and sequential CPU
+  offload are real, while `model_cpu_offload_and_qfloat8` is a cast-and-undo
+  no-op. The principal runtime controls are `temporal_window_size`,
+  `max_video_length`, and CFG batch size. Pass 2 moves all components to GPU
+  before installing offload hooks, defaults to non-low-memory checkpoint loading,
+  has no alternative offload mode, and its batch shell passes an unsupported
+  `--gwf_dir`. VAE tiling/slicing helpers are never called.
+- Probed both compute hosts read-only. Strix has an 8,151 MiB RTX 5070 Laptop
+  with 5,306 MiB currently used; B550 has two 24,564 MiB 3090 Ti cards with
+  22,430/21,636 MiB currently used. Both retain ample available host RAM. No
+  checkpoint or inference was launched.
+- Full findings, source anchors, refreshed external pages, live host observations,
+  and non-claims are consolidated in
+  [fusion and efficiency evidence](../evidence/fusion-mask-transform-quantization-offload-2026-10-22.json).

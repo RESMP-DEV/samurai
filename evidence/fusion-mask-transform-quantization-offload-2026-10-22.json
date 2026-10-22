@@ -1,0 +1,214 @@
+{
+  "recorded_at": "2026-10-22T11:55:49-07:00",
+  "agent": "Codex main session with read-only MiniMax M3.1 Flash CCR research workers",
+  "purpose": "Consolidate capability-aware fusion policy options, exact samurai-to-VOID mask transforms, quantization precedents, and RAM/VRAM offloading options for high-sensitivity segmentation and inpainting.",
+  "source": {
+    "revision": "2719b4352754687d8769afe818740a037c2475bb",
+    "dirty": false,
+    "netflix_void_path": "/Users/kearm/.cache/alphaheng/research/void-model",
+    "netflix_void_revision": "e3914f8f551dd4b880661991fd6b28cd1699a97a",
+    "diffusers_source_verified": "v0.33.1"
+  },
+  "fusion_policy": {
+    "implemented": {
+      "selection": "threshold or spatial top-k",
+      "weights": "static scalar or per-frame entropy confidence",
+      "quorum": "unweighted min_expert_support vote gate at support_threshold",
+      "calibration": "label-free Bernoulli Dawid-Skene EM over at least three aligned tensor experts; anchor is report-only",
+      "execution": "every expert is read for every batch; there is no routing, abstention, role, critic, or escalation state"
+    },
+    "real_pilot_ablation": {
+      "scope": "two trampoline frames, three model families, VOID primary mask used only for post-hoc evaluation",
+      "weighted_average": {"iou": 0.4188},
+      "unanimity_support_3": {"iou": 0.4620, "precision": 0.4835, "recall": 0.9123},
+      "capability_ranked_weights": {"iou": 0.4188, "note": "same selection as weighted average"},
+      "top2_capability_intersection": {"iou": 0.4443},
+      "per_frame_reference_oracle": {"iou": 0.4563},
+      "global_label_free_selection": {"iou": 0.4029}
+    },
+    "structural_findings": [
+      "An expert below support_threshold contributes no vote but still retains its full weight in the average; two p=0.9 votes plus one p=0 abstention currently fuse to 0.60 rather than a renormalized 0.90.",
+      "With three highly agreeing experts, support=2 is almost inert and support=3 behaves like unanimity.",
+      "Small capability differences in the pilot could not be expressed through scalar weights; capability must affect abstention, exclusion, quorum mass, routing, or a second critique phase.",
+      "The shipped command-expert example has one tensor expert and cannot enter tensor calibration.",
+      "Per-frame agreement alone was not a reliable expert router in the two-frame pilot."
+    ],
+    "recommended_policy": [
+      "Represent one vote per lab lineage and reject duplicate variants from the same provider/training stack.",
+      "Add structured roles: dense_anchor, semantic, boundary, affected_region, and critic; roles must not remain free text only.",
+      "Add explicit abstention and renormalize over active expert mass, with an active-mass floor and fail-closed behavior.",
+      "Use capability-weighted quorum mass, not merely a weighted average; capability scores remain label-free panel estimates rather than ground truth.",
+      "Escalate only high-disagreement frames: re-query the dissenting experts with prior masks and a critique/adjudication request.",
+      "Run critique as a second phase. The critic modifies or confirms a candidate; it must not silently become another first-phase vote.",
+      "The immediate implementation priority is explicit abstention plus active-mass renormalization because it fixes an existing inconsistency without new model APIs."
+    ]
+  },
+  "void_mask_transform": {
+    "samurai_writer": "primary/affected masks become 0 remove, 63 overlap, 127 affected-only, and 255 keep; frame zero clears affected-only pixels; gray H.264 uses yuv444p qp=0.",
+    "void_reader": [
+      "read quadmask",
+      "area-resize to 384x672",
+      "requantize to 0/63/127/255",
+      "invert with 255-value",
+      "divide by 255",
+      "pipeline preprocess and remap again"
+    ],
+    "pass_1_mapping": {
+      "hardcoded_use_trimask": true,
+      "0_remove": 1.0,
+      "63_overlap": 1.0,
+      "127_affected_only": 0.498,
+      "255_keep": 0.0,
+      "note": "overlap collapses with remove; affected remains a middle conditioning level"
+    },
+    "pass_2_mapping": {
+      "hardcoded_use_trimask": false,
+      "0_remove": 1.0,
+      "63_overlap": 1.0,
+      "127_affected_only": 1.0,
+      "255_keep": 0.0,
+      "note": "Pass 2 receives a binary non-keep mask"
+    },
+    "dilation": "config dilate_width=11 applies only to per-object mask_*.mp4 input, not a prepared quadmask_*.mp4",
+    "candidate_pre_void_transforms": [
+      "separate erosion/dilation policies for primary, overlap, and affected channels",
+      "temporal median or mode consensus to remove flicker before area resize",
+      "anchor-to-frame optical-flow propagation and disagreement bands",
+      "connected-component size/permanence filtering",
+      "controlled boundary feathering or uncertainty bands that survive VOID requantization",
+      "per-frame rather than globally constant morphology"
+    ],
+    "status": "proposed transformations have no executable samurai implementation yet"
+  },
+  "quantization": {
+    "local_component_sizes": {
+      "void_pass_1_transformer": {"parameters": 5571462784, "bf16_gib": 11.14, "gemm_shaped_pct": 85.4},
+      "t5_xxl_encoder": {"parameters": 2497284096, "bf16_gib": 4.99, "gemm_shaped_pct": 100.0},
+      "cogvideox_vae": {"parameters": 215583907, "bf16_gib": 0.43, "gemm_shaped_pct": 0.0},
+      "sam_3_1_fp32_source": {"parameters": 874365676, "bf16_gib": 1.75}
+    },
+    "external_precedents": [
+      {
+        "name": "CogVideo official TorchAO CLI example",
+        "url": "https://github.com/zai-org/CogVideo/blob/main/inference/cli_demo_quantization.py",
+        "finding": "INT8 weight-only and FP8 dynamic activation casting cover T5, transformer, and VAE; FP8 is documented for H100-or-higher NVIDIA GPUs."
+      },
+      {
+        "name": "Diffusers TorchAO",
+        "url": "https://huggingface.co/docs/diffusers/quantization/torchao",
+        "finding": "Clean quantization hooks enter through from_pretrained/Accelerate and support Linear layers; CPU quantization plus model CPU offload is an explicit deployment pattern."
+      },
+      {
+        "name": "SVDQuant",
+        "url": "https://hanlab.mit.edu/projects/svdquant",
+        "finding": "W4A4 with a high-precision low-rank outlier branch and fused kernels; publisher-reported 3.5x memory reduction and 3.0x speedup versus 4-bit weight-only on FLUX.1."
+      },
+      {
+        "name": "QVGen",
+        "url": "https://arxiv.org/html/2505.11497",
+        "finding": "video-DiT QAT at 3-4 bits, including CogVideoX; auxiliary error modules are decayed to avoid permanent inference overhead."
+      },
+      {
+        "name": "Q-VDiT",
+        "url": "https://proceedings.mlr.press/v267/feng25q.html",
+        "finding": "token-aware error compensation and temporal-maintenance distillation for video DiT, reported at W3A6."
+      },
+      {
+        "name": "DeltaQuant",
+        "url": "https://openaccess.thecvf.com/content/CVPR2026/html/Li_DeltaQuant_4-bit_Video_Diffusion_Models_with_Spatiotemporal_Delta_Smoothing_CVPR_2026_paper.html",
+        "finding": "FP8 core tokens plus quantized spatiotemporal deltas and SVDQuant-style weights; publisher-reported Wan 2.2 model-size and memory reductions."
+      },
+      {
+        "name": "unsloth/sam3.1",
+        "url": "https://huggingface.co/unsloth/sam3.1",
+        "finding": "BF16, INT8, INT8-ConvRot, and FP8 artifacts with publisher-reported mean mask IoU 0.9971-0.9984 versus BF16 on 53 prompts over 6 images."
+      },
+      {
+        "name": "Sparknight/sam3.1-int8-int4-convrot",
+        "url": "https://huggingface.co/Sparknight/sam3.1-int8-int4-convrot",
+        "finding": "selective W8A8/W4A4 transformer linears with FP16 sensitive layers; 1.19 GiB and 0.98 GiB artifacts and publisher-reported 14.8%/27.8% RTX 3090 speedups."
+      }
+    ],
+    "void_blockers": [
+      "custom transformer and VAE from_pretrained overrides bypass Diffusers quantization_config hooks",
+      "model_cpu_offload_and_qfloat8 loads FP8 and immediately casts back to BF16; it is not quantized compute",
+      "public NVFP4 remains a custom TorchAO integration rather than a TorchAoConfig switch",
+      "the convolution-heavy VAE is a poor fit for low-bit GEMM recipes and has non-16-divisible input/output channels"
+    ],
+    "recommended_order": [
+      "first qualify T5 FP8 or INT8 because it uses the stock transformers loader and is primarily a weight-residency win",
+      "second validate a hosted or prequantized SAM 3.1 artifact on real clips rather than trusting publisher spot metrics",
+      "third prototype VOID DiT W4A4 only with timestep-aware activation calibration and a fused or low-rank outlier path",
+      "leave the VAE BF16 until end-to-end profiling proves that it is a bottleneck"
+    ]
+  },
+  "ram_offload": {
+    "live_hosts": {
+      "strix": {"gpu": "RTX 5070 Laptop", "vram_mib_per_gpu": 8151, "vram_used_mib": 5306, "ram_available_mib": 89834, "swap_used_mib": 61},
+      "b550": {"gpu": "two RTX 3090 Ti", "vram_mib_per_gpu": 24564, "vram_used_mib": [22430, 21636], "ram_available_mib": 87848, "swap_used_mib": 5679}
+    },
+    "implemented_modes": [
+      "model_full_load",
+      "model_cpu_offload",
+      "model_cpu_offload_and_qfloat8",
+      "sequential_cpu_offload"
+    ],
+    "source_findings": [
+      "unknown gpu_memory_mode silently selects full GPU load",
+      "model_cpu_offload and sequential_cpu_offload retain all weights in host RAM and move components or layers on demand",
+      "the qfloat8 mode is effectively BF16 after load and its conversion wrapper is a BF16-to-BF16 round trip",
+      "Pass 2 hardcodes model CPU offload and has no FP8 or sequential alternative",
+      "Pass 2 moves transformer, VAE, and T5 fully to GPU before enabling offload, creating an avoidable startup spike",
+      "Pass 2 custom loading defaults to low_cpu_mem_usage=False and can hold a model plus checkpoint state dict transiently",
+      "vae.enable_tiling and enable_slicing are never called by VOID; its existing encode/decode helpers do batch in groups of 8 and split convolution inputs above 2 GiB",
+      "Pass 1 hardcodes 30 inference steps and ignores config.video_model.num_inference_steps",
+      "temporal_multidiffusion_stride has a pipeline parameter but predict_v2v never passes it; config misspells it temproal_multidiffusion_stride",
+      "system.device and low_gpu_memory_mode are unused",
+      "samurai's Pass 1 command does not forward config.seed, so pinned VOID uses its config.system.seed",
+      "the Pass 2 batch shell passes unsupported --gwf_dir and fails at argparse",
+      "warped-noise generation imports the external rp/CommonSource Go-with-the-Flow path and may install dependencies at runtime; the in-repo RAFT module is not used"
+    ],
+    "effective_controls": {
+      "transformer_vram": "reduce temporal_window_size; 85 frames is 22 latent frames at the pinned default",
+      "host_ram_total_work": "reduce max_video_length; 197 frames is 50 latent frames and multiple temporal windows",
+      "activation_batch": "guidance_scale=1.0 disables CFG in Pass 1; Pass 2 uses 6.0 and doubles the conditional/unconditional activation batch",
+      "vae_activation": "call the existing tiling/slicing helpers after repairing/qualifying them",
+      "startup_peak": "avoid moving every Pass 2 component to GPU before installing offload hooks"
+    },
+    "qualification_matrix": [
+      "Pass 1 model_cpu_offload versus sequential_cpu_offload on one fixed 60-frame trampoline sequence",
+      "temporal_window_size 49/61/85 with constant output and mask digests where mathematically possible",
+      "max_video_length 61/85/197 for host-RAM and peak/steady VRAM",
+      "Pass 1 CFG 1.0 versus 6.0 only as a diagnostic, not a quality substitution",
+      "explicit VAE tiling/slicing A/B",
+      "Pass 2 after removing pre-offload GPU movement and invalid shell flags"
+    ]
+  },
+  "worker_evidence": [
+    {
+      "report": "build/research/fusion-policy-options.txt",
+      "outcome": "completed; parent verified cited source lines and retained metrics"
+    },
+    {
+      "report": "build/research/void-sam-quantization-options.txt",
+      "outcome": "completed; parent verified pinned source and refreshed public precedents in build/research/external-quantization-refresh.txt"
+    },
+    {
+      "report": "build/research/void-mask-transform-options.txt",
+      "outcome": "worker stopped at a verification boundary; parent completed and verified the mapping against pinned VOID and Diffusers v0.33.1"
+    },
+    {
+      "report": "build/research/void-ram-offloading-options.txt",
+      "outcome": "worker stopped at a verification boundary; parent completed and verified pinned source and live host state"
+    }
+  ],
+  "non_claims": [
+    "This is a source, prior-receipt, public-page, and live-host inventory; no VOID or SAM checkpoint was downloaded or executed.",
+    "No fusion policy, mask transformation, quantizer, or offload repair was implemented in this task.",
+    "The two-frame pilot comparison does not establish a full-video or multi-clip quality ranking.",
+    "Publisher quantization metrics are external evidence, not samurai validation.",
+    "No VRAM/RAM sweep was run; live host free-memory values are instantaneous operational observations only.",
+    "No 2-4 bit VOID/video-DiT quality result exists for the pinned VOID checkpoints.",
+    "Proposed round-robin critique requires a new command adapter request/response contract and remains unimplemented."
+  ]
+}
