@@ -58,9 +58,9 @@ Source-verified facts that shape the implementation:
 | Canonical SAM 3.1 adapter and CLI | implemented | Source and local API contract tests; no CUDA model turn |
 | Primary-mask video generation | implemented/exercised against fake predictor | Real ffmpeg media round trips; no SAM checkpoint |
 | VOID quadmask sequence builder | implemented/exercised | Tiny local videos; no VOID model call |
-| Multi-model spatial ensemble | implemented/exercised with tensors and fake command experts | Real ffmpeg output; no external multimodal API or quality claim |
+| Multi-model spatial ensemble | implemented/exercised with synthetic contracts and a real two-frame three-family panel | Real APIs, tensors, calibration, fusion, and VOID-reference metrics; no full-video or multi-clip quality claim |
 | Label-free expert calibration | implemented/exercised with synthetic aligned tensors | Agreement metrics on synthetic panels; no real-model or live-run claim |
-| AIMLAPI coordinate adapter | implemented | Payload/parser tests only; no live API call |
+| AIMLAPI/OpenAI-compatible coordinate adapter | implemented/exercised through GMI | Payload/parser tests plus one two-frame GMI vision call; no AIMLAPI call |
 | VOID Pass 1/Pass 2 command orchestration | implemented | Path and command tests/dry run; no GPU run |
 | SAM 2/SAMURAI historical tree | classified as frozen observation | Moved under `third_party/`; canonical imports rejected by check |
 | SAM 3.1 live CUDA inference | proposed qualification | Requires compute host, access-approved checkpoint, artifact digest |
@@ -297,3 +297,33 @@ Source-verified facts that shape the implementation:
   [SAM access terms evidence](../evidence/sam-api-checkpoint-access-2026-10-21.json).
   No hosted endpoint was called with a credential and no checkpoint was
   downloaded or executed.
+
+### 2026-10-22, real three-family expert-panel pilot
+
+- Inventoried the local media and research caches. Four YouTube-derived videos
+  are present, but only the Irving Younger lecture is a strong person-mask
+  candidate; the 2.2 GiB GPU MODE Phonon dataset is audio/ASR Parquet with 16
+  source IDs, not visual masks.
+- Found a stronger local visual corpus in the pinned VOID reference sample
+  cache: seven aligned input/quadmask sequences, including a 60-frame
+  trampoline clip with a moving person, pose changes, scale changes, and
+  podium overlap.
+- Ran the first real three-family panel on original trampoline frames 0 and 10:
+  Grok 4.7 through `alt-vision`, GLM 5.3 Flash through `zai-vision`, and GMI's
+  served DeepSeek V4 Flash Vision experiment through the OpenAI-compatible
+  coordinate adapter. Each response was parsed into normalized boxes, rasterized
+  by the canonical command-expert path, and retained as an aligned probability
+  tensor.
+- Label-free calibration converged in 12 iterations and produced nearly equal
+  confidence weights. Unanimous-support fusion improved reference IoU over all
+  three individual experts: 0.4620 fused versus 0.3975-0.4292 individually,
+  with precision 0.4835 and recall 0.9123 against the VOID primary-mask
+  reference.
+- Repaired the OpenAI-compatible adapter request to send a normal User-Agent.
+  A live GMI A/B proved the exact image payload receives Cloudflare HTTP 403
+  error 1010 without it and succeeds with it.
+- Full media, response IDs, digests, metrics, worker provenance, and non-claims
+  are consolidated in
+  [three-expert real-video pilot evidence](../evidence/three-expert-real-video-pilot-2026-10-22.json).
+  This is a two-frame mechanism pilot, not a full-video quality claim; no SAM
+  3.1 checkpoint or VOID generative model ran.

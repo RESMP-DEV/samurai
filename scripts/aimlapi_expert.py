@@ -91,6 +91,7 @@ def call_api(
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
+            "User-Agent": "samurai-openai-vision-adapter/1",
         },
         method="POST",
     )

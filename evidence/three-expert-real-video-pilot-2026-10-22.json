@@ -1,0 +1,151 @@
+{
+  "recorded_at": "2026-10-22T11:01:00-07:00",
+  "agent": "Codex main session with two read-only MiniMax M3.1 Flash CCR inventory workers",
+  "purpose": "Inventory local YouTube/video and GPU MODE-style datasets, select a real visual corpus, and pilot the three-expert calibration/fusion mechanism against a VOID reference mask.",
+  "source": {
+    "revision": "8916c76229efcdfd5f0ac9e2be030631c1a09d76",
+    "dirty": true,
+    "dirty_note": "scripts/aimlapi_expert.py added a User-Agent required by the live GMI endpoint"
+  },
+  "local_inventory": {
+    "downloaded_youtube_videos": [
+      {
+        "path": "/Users/kearm/My Drive/YTDown.com_YouTube_Irving-Younger-s-10-Commandments-Of-Cros_Media_dBP2if0l-a8_001_480p.mp4",
+        "video_id": "dBP2if0l-a8",
+        "shape": "640x480, 77945 frames, 2600.82 s"
+      },
+      {
+        "path": "/Users/kearm/My Drive/Google AI Studio/YTDown.com_YouTube_Meth-2-0-&-Opioid-A-Collision-of-Epidemi_Media_uwGZ3I6TmRA_001_1080p.mp4",
+        "video_id": "uwGZ3I6TmRA",
+        "shape": "1920x1080, 156315 frames, 5215.76 s"
+      },
+      {
+        "path": "/Users/kearm/My Drive/Google AI Studio/YTDown.com_YouTube_E157-CME-Wide-Awake-An-Update-on-Best-Pr_Media__gUMvwkcw-Q_001_1080p.mp4",
+        "video_id": "gUMvwkcw-Q",
+        "shape": "1080x1080, 87627 frames, 3505.11 s"
+      },
+      {
+        "path": "/Users/kearm/Library/CloudStorage/GoogleDrive-jason.wu.lu5@gmail.com/Other computers/My Mac/Downloads/Advances in Lipoprotein (a) Cardiology Grand Rounds - Stanford CME (1080p, h264).mp4",
+        "video_id": null,
+        "shape": "1920x1080, 2240 decoded frames, 74.77 s",
+        "provenance": "yt-dlp-style title/(resolution, codec) filename"
+      }
+    ],
+    "visual_review": "Native vision CLI inspection of sampled frames found the Irving Younger clip useful for person segmentation, the Meth/Opioid webinar weak but usable as a fixed-layout regression, and the Wide Awake clip effectively a static graphic.",
+    "short_non_youtube_candidate": "/Users/kearm/My Drive/First Cartwheel - 1724298067624.mp4 (1920x1080, 295 frames, 9.83 s; Clipchamp export)"
+  },
+  "gpu_mode_dataset": {
+    "path": "/Users/kearm/.local/share/phonon-research/hf-private-datasets/youtube_technical_v2_gpumode_latest_20260525b",
+    "size": "2.2 GiB",
+    "rows": 3010,
+    "duration_seconds": 90115.013,
+    "source_count": 16,
+    "schema": "Hugging Face-compatible audio structs embedded in four Parquet shards",
+    "verdict": "Useful as stable GPU MODE source IDs/titles, not as a spatial-mask corpus; no MP4 files exist under phonon-research."
+  },
+  "visual_corpus": {
+    "path": "/Users/kearm/.cache/alphaheng/research/void-model/sample",
+    "revision": "e3914f8f551dd4b880661991fd6b28cd1699a97a",
+    "sequences": {
+      "lime": "3840x2160, 46 frames",
+      "pillow": "3840x2160, 62 frames",
+      "moving_ball": "3840x2160, 62 frames",
+      "ducky-float": "1296x720, 62 frames",
+      "BigBen": "544x360, 50 frames",
+      "spinner": "4096x2160, 32 frames",
+      "trampoline": "3840x2160, 60 frames"
+    },
+    "selected_sequence": "trampoline",
+    "selected_reason": "Clear moving person, large pose/scale changes, podium overlap, and an aligned VOID quadmask reference."
+  },
+  "pilot": {
+    "input": {
+      "source": "/Users/kearm/.cache/alphaheng/research/void-model/sample/trampoline/input_video.mp4",
+      "source_sha256": "c82d889212e4d34d1348db7f1f85977e19c8a5bd6d56663f9eb7155aeb2bf700",
+      "selected_original_frames": [0, 10],
+      "pilot": "build/research/trampoline-three-expert/input-2.mp4",
+      "pilot_shape": "640x360, 2 frames",
+      "pilot_sha256": "041bf4ad84aa63c944eb9472215064ffb995c5c3e30b5f8a1db356ee7a1a255b"
+    },
+    "reference": {
+      "source": "/Users/kearm/.cache/alphaheng/research/void-model/sample/trampoline/trimask_quadmask.mp4",
+      "sha256": "6e6d5293398af384dd9e90d4cb34b5e6d054ed98fc573ae0ac1260cf0ba83157",
+      "selection": "explicit ffmpeg select eq(n,0)+eq(n,10), nearest-neighbor scale to 640x360",
+      "positive_semantics": "quadmask values 0 or 63"
+    },
+    "experts": [
+      {
+        "name": "grok-4.7",
+        "lane": "alt-vision native CLI",
+        "response_ids": ["c3d81e9d-3c5d-43b5-9bad-e9eb7ec0f31c", "4c8492f6-8a5e-4851-9731-aceafe6f91cf"],
+        "tensor_sha256": "4f89ba2c223f36364d49dee8b651b0fbe06b561ee0fe4c663c9b91671a5ebcd4"
+      },
+      {
+        "name": "glm-5.3-flash",
+        "lane": "zai-vision native CLI",
+        "response_ids": ["20261023015324cf0b08d600eb4fc5", "20261023015331b19f9cc8fc4b4dc6"],
+        "tensor_sha256": "9479e978dce6c5497f95d13e08c0c75f2d6c025c17904d9178a67178041ece45"
+      },
+      {
+        "name": "deepseek-v4-flash-vision-exp",
+        "lane": "GMI OpenAI-compatible endpoint through scripts/aimlapi_expert.py",
+        "served_model": "deepseek/deepseek-v4-flash-vision-exp",
+        "response_id": "9e830f49-ef52-45d9-a27a-92d170f291a5",
+        "tensor_sha256": "5a0c39708b2c9cf65a24d062a3405d6257d189458341877d087b99dd66f08be5"
+      }
+    ],
+    "calibration": {
+      "command": "uv run samurai calibrate --config ensemble-tensor.json --config-output ensemble-calibrated.json --report calibration-report.json --latent-output latent-primary.npy --max-samples 250000",
+      "exit_code": 0,
+      "converged": true,
+      "iterations": 12,
+      "samples": 250000,
+      "confidence_weights": {
+        "grok-4.7": 0.3303948630774379,
+        "glm-5.3-flash": 0.33483573633209135,
+        "deepseek-v4-flash-vision-exp": 0.3347694005904708
+      }
+    },
+    "fusion": {
+      "command": "uv run samurai ensemble --config ensemble-calibrated-support3.json --output fused-mask-support3.mp4 --report ensemble-report-support3.json",
+      "exit_code": 0,
+      "settings": "threshold 0.5, min_expert_support 3, support_threshold 0.5, entropy weights",
+      "output": "build/research/trampoline-three-expert/fused-mask-support3.mp4",
+      "output_sha256": "f39b9c430d1f8c7b10f8f00965faf92c2044ff7d76ee6457eeb07c3608b26251",
+      "output_encoding": "gray H.264 yuv444p"
+    },
+    "metrics_against_void_reference": {
+      "grok-4.7": {"iou": 0.4292490916431167, "precision": 0.4393594041322314, "recall": 0.9491185003347468},
+      "glm-5.3-flash": {"iou": 0.3974885219982365, "precision": 0.4020111319536271, "recall": 0.9724763817600238},
+      "deepseek-v4-flash-vision-exp": {"iou": 0.4197393045933611, "precision": 0.42902208201892744, "recall": 0.9509782042698802},
+      "fused_support3": {"iou": 0.46200791109436806, "precision": 0.48348182606638807, "recall": 0.9122963624191028}
+    },
+    "adapter_repair": {
+      "change": "Add User-Agent samurai-openai-vision-adapter/1 to scripts/aimlapi_expert.py",
+      "live_proof": "The exact GMI image payload returned HTTP 403 Cloudflare error 1010 without a User-Agent and HTTP 200 with gmi-cli/0.1.0; the repaired adapter then returned a valid regions_by_frame response."
+    }
+  },
+  "worker_evidence": {
+    "video_inventory_worker": {
+      "run_dir": "/Users/kearm/.cache/ccr-worker-runs/20261022-103746-daptco6u",
+      "served_route": "minimax,MiniMax-M3.1-Flash",
+      "outcome": "completed",
+      "report": "build/research/local-video-inventory.txt"
+    },
+    "dataset_inventory_worker": {
+      "run_dir": "/Users/kearm/.cache/ccr-worker-runs/20261022-103753-8niqkihj",
+      "served_route": "minimax,MiniMax-M3.1-Flash",
+      "outcome": "timed_out after discovering the VOID and GPU MODE candidates",
+      "parent_validation": "The parent independently probed dataset summaries, Parquet schema markers, VOID revision, sequence files, frame counts, quadmask values, and pilot metrics."
+    }
+  },
+  "non_claims": [
+    "This is a two-frame pilot, not a full-video or multi-clip quality claim.",
+    "The text-vision experts emit normalized boxes that samurai rasterizes; they are not calibrated dense mask models.",
+    "Label-free calibration measures panel agreement and does not use the VOID reference as labels; the reference is used only for post-hoc evaluation.",
+    "No SAM 3.1 checkpoint, local SAM 3.1 inference, Netflix VOID model, CogVideoX, or VOID inpainting pass was executed.",
+    "Grok reached its free usage limit after two successful frame calls; the pilot was reduced rather than substituting synthetic Grok output.",
+    "GPU MODE source IDs can guide future visual downloads, but no GPU MODE video was downloaded and no license provenance was established for the downloaded YouTube files.",
+    "The cached sam3_masks directory has no durable command receipt proving that its mask was produced by a live SAM 3 model, so it was not counted as one of the three model experts."
+  ]
+}
