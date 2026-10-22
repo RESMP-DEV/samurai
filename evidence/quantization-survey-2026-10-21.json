@@ -1,0 +1,422 @@
+{
+  "recorded_at": "2026-10-21T18:35:21.694676-07:00",
+  "agent": "Codex",
+  "title": "Local constituent components: quantization surface and NVFP4 feasibility",
+  "source": {
+    "revision": "a08163abdd4c76f705144b95efda0bcac7d2f7f5",
+    "dirty": false,
+    "repository": "/Users/kearm/samurai"
+  },
+  "scope": "Survey of every locally-present constituent component of the VOID+Model stack for quantization feasibility, and a live measurement of NVFP4 (E2M1 weights, E4M3 16-element block scales) behaviour on Blackwell SM120 at the exact tensor shapes of those models. This run does NOT execute SAM 3.1 or VOID inference, does not produce masks or videos, does not quantify end-to-end segmentation or inpainting quality, does not download any checkpoint, and does not establish that any quantized configuration is fit for production use.",
+  "local_constituents": [
+    {
+      "component": "Netflix VOID repository",
+      "path": "/Users/kearm/.cache/alphaheng/research/void-model",
+      "revision": "e3914f8f551dd4b880661991fd6b28cd1699a97a",
+      "role": "Pass 1 base inpainting and Pass 2 warped-noise refinement orchestration",
+      "checkpoints": [
+        {
+          "repo": "netflix/void-model",
+          "files": [
+            "void_pass1.safetensors",
+            "void_pass2.safetensors"
+          ],
+          "bytes_each": 11143042384,
+          "gated": false,
+          "license": "apache-2.0"
+        },
+        {
+          "repo": "alibaba-pai/CogVideoX-Fun-V1.5-5b-InP",
+          "files": [
+            "transformer/diffusion_pytorch_model.safetensors"
+          ],
+          "bytes": 11142305104,
+          "gated": false,
+          "license": "other"
+        }
+      ]
+    },
+    {
+      "component": "Meta SAM 3 repository",
+      "path": "/Users/kearm/.cache/alphaheng/research/sam3",
+      "revision": "7f473cfd983d5eb43040ff608f66bff0d7bdcb53",
+      "role": "SAM 3.1 multiplex video predictor (default anchor)",
+      "checkpoints": [
+        {
+          "repo": "facebook/sam3.1",
+          "files": [
+            "sam3.1_multiplex.pt"
+          ],
+          "bytes": 3502755717,
+          "gated": "manual",
+          "access_from_this_machine": "HTTP 401 without approval"
+        },
+        {
+          "repo": "Reza2kn/sam3.1-nvfp4-detector-no-language",
+          "files": [
+            "sam3.1_multiplex.pt",
+            "nvfp4_model.safetensors"
+          ],
+          "bytes_mirror_pt": 3502755717,
+          "gated": false,
+          "note": "ungated mirror; byte size matches the gated official file exactly, SHA256 not comparable because the official SHA is masked by gating"
+        }
+      ]
+    },
+    {
+      "component": "Frozen SAM 2 / SAMURAI tree",
+      "path": "/Users/kearm/samurai/third_party",
+      "role": "dated observation only, never an import target",
+      "checkpoints_present": false
+    },
+    {
+      "component": "samurai canonical toolkit",
+      "path": "/Users/kearm/samurai/src/samurai",
+      "role": "expert fusion, label-free calibration, quadmask and VOID orchestration",
+      "quantization_surface": "pure NumPy; no model weights of its own"
+    },
+    {
+      "component": "AIMLAPI multimodal experts",
+      "path": "/Users/kearm/samurai/scripts/aimlapi_expert.py",
+      "role": "hosted coordinate-region experts",
+      "quantization_surface": "none; hosted API models have no local weights"
+    }
+  ],
+  "parameter_census": {
+    "method": "safetensors header parsed over HTTP range requests; no weights downloaded",
+    "results": [
+      {
+        "name": "VOID Pass 1 transformer",
+        "params": 5571462784,
+        "dtype": "BF16",
+        "gemm_shaped_pct": 85.4,
+        "tensors": 1024,
+        "bf16_gb": 11.14,
+        "nvfp4_gb": 3.13
+      },
+      {
+        "name": "CogVideoX-Fun 5b transformer",
+        "params": 5571094144,
+        "dtype": "BF16",
+        "gemm_shaped_pct": 85.4,
+        "bf16_gb": 11.14,
+        "nvfp4_gb": 3.13
+      },
+      {
+        "name": "T5-XXL encoder",
+        "params": 2497284096,
+        "dtype": "BF16",
+        "gemm_shaped_pct": 100.0,
+        "bf16_gb": 4.99,
+        "nvfp4_gb": 1.4
+      },
+      {
+        "name": "CogVideoX VAE",
+        "params": 215583907,
+        "dtype": "BF16",
+        "gemm_shaped_pct": 0.0,
+        "bf16_gb": 0.43,
+        "nvfp4_gb": null,
+        "note": "all 5D/4D conv tensors; no GEMM-shaped weight; not an FP4 candidate"
+      },
+      {
+        "name": "SAM 3.1 total",
+        "params": 874365676,
+        "dtype": "FP32",
+        "bf16_gb": 1.75,
+        "nvfp4_detector_only_gb": 0.27
+      }
+    ]
+  },
+  "live_measurements": {
+    "host": "strix (ZeroTier alias), NVIDIA GeForce RTX 5070 Laptop GPU, compute capability 12.0 (SM120), 8151 MiB",
+    "software": "torch 2.14.1+cu130, torchao prototype mx_formats NVFP4Tensor, CUDA 13.4 / NVCC 13.0.88",
+    "native_fp4_kernel_observed": "cutlass3x_sm120_bstensorop_s16864gemm_block_scaled_ue4m3xe2m1_ue4m3xe2m1_f32_b",
+    "gemm_results": [
+      {
+        "shape": "CogVideoX attn proj M=21510 K=3072 N=3072",
+        "fp4_tflops": 278.9,
+        "bf16_tflops": 38.0,
+        "speedup": 7.35,
+        "rel_l2_err": 0.1344,
+        "cosine": 0.990961
+      },
+      {
+        "shape": "CogVideoX token seq M=21510 K=3072 N=3072",
+        "fp4_tflops": 278.7,
+        "bf16_tflops": 45.1,
+        "speedup": 6.18,
+        "rel_l2_err": 0.1344
+      },
+      {
+        "shape": "T5-XXL q M=226 K=4096 N=4096",
+        "fp4_tflops": 206.4,
+        "bf16_tflops": 32.8,
+        "speedup": 6.29,
+        "rel_l2_err": 0.13452
+      },
+      {
+        "shape": "T5-XXL ff up M=226 K=4096 N=10240",
+        "fp4_tflops": 247.3,
+        "bf16_tflops": 40.8,
+        "speedup": 6.07,
+        "rel_l2_err": 0.13428
+      },
+      {
+        "shape": "SAM3 det trunk qkv M=4096 K=1024 N=3072",
+        "fp4_tflops": 223.8,
+        "bf16_tflops": 43.5,
+        "speedup": 5.14,
+        "rel_l2_err": 0.1343
+      },
+      {
+        "shape": "SAM3 det decoder M=1024 K=256 N=1024",
+        "fp4_tflops": 44.4,
+        "bf16_tflops": 20.8,
+        "speedup": 2.13,
+        "rel_l2_err": 0.13442
+      }
+    ],
+    "w4a16_vs_w4a4": {
+      "finding": "weight-only NVFP4 (W4A16) gives speedup 0.99-1.05x because the SM120 path dequantizes weights to BF16 before the GEMM; only W4A4 reaches the native FP4 tensor-core kernel",
+      "measured": [
+        {
+          "shape": "CogVideoX attn proj",
+          "w4a4_speedup": 6.21,
+          "w4a16_dequant_speedup": 1.0
+        },
+        {
+          "shape": "SAM3 det trunk qkv",
+          "w4a4_speedup": 5.43,
+          "w4a16_dequant_speedup": 0.99
+        },
+        {
+          "shape": "T5-XXL q",
+          "w4a4_speedup": 6.31,
+          "w4a16_dequant_speedup": 1.05
+        }
+      ],
+      "kernel_evidence": "torchao prototype mx_formats nvfp4_tensor.py dequantizes weight for the weight-only path; the native kernel appears only through torch._scaled_mm with both operands packed FP4"
+    },
+    "fp8_comparison": {
+      "fp8_e4m3_rel_l2_err": 0.0375,
+      "fp4_rel_l2_err": 0.1343,
+      "note": "FP8 error is about 3.6x smaller, but measured FP8 GEMM speedup on SM120 was 1.12x (SAM3 trunk), 0.92x (CogVideoX proj) and 0.12x (T5-XXL, latency bound)",
+      "conclusion": "FP8 buys accuracy, NVFP4 buys speed; they are not interchangeable"
+    },
+    "calibration_sensitivity": {
+      "method": "NVFP4 weight quantization at the four model layer shapes with global scale chosen from weight amax, 2x overscaled, and 0.5x underscaled",
+      "rel_l2_err": {
+        "static_from_weight_amax": 0.0951,
+        "overscaled_global_2x": 0.0952,
+        "underscaled_global_0.5x": 0.0952
+      },
+      "frac_blocks_saturated": 0.0,
+      "weight_outlier_ratio_max_over_median_block_amax": "9.18-9.95",
+      "finding": "for weight-only NVFP4 the per-tensor global scale is not the error driver; the 16-element block scale absorbs the outliers. Calibration of the weight global scale buys little.",
+      "activation_scale_study": {
+        "setup": "one outlier batch (20x) in the calibration set, activation per-tensor scale from calibration amax",
+        "results": {
+          "bf16_act_reference": 0.0,
+          "act_dynamic": 0.18287,
+          "act_static_calibrated_with_outlier": 0.89961,
+          "act_static_calibrated_trimmed": 0.42958,
+          "act_static_oracle": 0.27534
+        },
+        "finding": "for W4A4 the activation global scale IS the error driver; a single outlier batch in the calibration set inflates the scale and produces up to 90% relative error. Trimmed calibration is mandatory."
+      }
+    },
+    "decision_boundary_impact": {
+      "method": "thresholded mask comparison between BF16 and NVFP4-weight logits at realistic layer shapes",
+      "mask_iou_at_threshold": "0.923-0.940",
+      "pixel_agreement": "0.969-0.971",
+      "dimension_sensitivity": "K=256..4096 gives IoU 0.9264-0.9376; wider layers are slightly better, so padding-free FP4 blocks do not fix the error",
+      "finding": "NVFP4 weight error does not survive the segmentation decision boundary intact; a per-pixel mask changes on roughly 3% of pixels"
+    }
+  },
+  "nvfp4_verdict": {
+    "quantization_support_found_in_upstream_source": "none",
+    "support_detail": {
+      "sam3": "no torchao, no modelopt, no llmcompressor, no torch.scaled_mm, no quantization_config, no observer or calibration code",
+      "void_model": "no torchao, no llmcompressor, no modelopt; the existing model_cpu_offload_and_qfloat8 mode is a naive weight cast to torch.float8_e4m3fn (videox_fun/utils/fp8_optimization.py:28-43) plus an autocast wrapper, with no FP8 tensor-core GEMM path",
+      "sam2_third_party": "no quantize, int8, fp8, fp4, nvfp4, mxfp4, scaled_mm, bitsandbytes, torchao, fbgemm or modelopt anywhere in the tree"
+    },
+    "per_component": [
+      {
+        "component": "VOID Pass 1 transformer (CogVideoX 5b)",
+        "gemm_pct": 85.4,
+        "nvfp4": "plausible",
+        "speedup_measured": "5.4-7.4x on its exact GEMM shapes via W4A4",
+        "block_size_ok": true,
+        "note": "requires W4A4 with activation quantization and trimmed activation calibration; 42 blocks, dim 3072, ff 12288"
+      },
+      {
+        "component": "VOID Pass 2 transformer",
+        "gemm_pct": 85.4,
+        "nvfp4": "plausible",
+        "note": "same architecture as Pass 1; checkpoint netflix/void-model/void_pass2.safetensors"
+      },
+      {
+        "component": "T5-XXL text encoder",
+        "gemm_pct": 100.0,
+        "nvfp4": "plausible but low value",
+        "speedup_measured": "6.07-6.29x on GEMM shapes",
+        "note": "runs once per prompt over 226 tokens; latency-bound, so the compute win does not move end-to-end time"
+      },
+      {
+        "component": "CogVideoX VAE",
+        "gemm_pct": 0.0,
+        "nvfp4": "not plausible",
+        "note": "all conv3d; 0 GEMM-shaped weights; keep in BF16"
+      },
+      {
+        "component": "SAM 3.1 detector ViT trunk",
+        "gemm_pct": 87.7,
+        "nvfp4": "plausible",
+        "speedup_measured": "5.14x on its exact GEMM shape",
+        "note": "32 blocks, dim 1024; the fused addmm_act path (sam3/perflib/fused.py:15-18) hard-casts to bf16 and must be bypassed"
+      },
+      {
+        "component": "SAM 3.1 detector fusion encoder/decoder",
+        "gemm_pct": "high",
+        "nvfp4": "plausible",
+        "note": "6 encoder + 6 decoder layers, 200-query decoder"
+      },
+      {
+        "component": "SAM 3.1 tracker memory transformer",
+        "gemm_pct": "high",
+        "nvfp4": "plausible",
+        "note": "DecoupledTransformerDecoderLayerv2 x4, 12 Linear each"
+      },
+      {
+        "component": "SAM 3.1 mask decoder MLPs",
+        "gemm_pct": "partial",
+        "nvfp4": "plausible for the hypernetwork MLPs only",
+        "note": "ConvTranspose2d upsampling path stays BF16"
+      },
+      {
+        "component": "SAM 3.1 language backbone",
+        "gemm_pct": "partial",
+        "nvfp4": "not recommended",
+        "note": "50.6M-parameter embedding table is a gather, not a GEMM; the existing third-party NVFP4 artifact deliberately keeps the language tower in FP32 for prompt accuracy"
+      },
+      {
+        "component": "SAM 3.1 PixelDecoder / TriHead neck / memory down-sampler",
+        "gemm_pct": 0.0,
+        "nvfp4": "not plausible",
+        "note": "conv-only"
+      },
+      {
+        "component": "SAM 3.1 Triton NMS and connected components",
+        "gemm_pct": 0.0,
+        "nvfp4": "not plausible",
+        "note": "bool and int kernels"
+      },
+      {
+        "component": "SAM 2 Hiera trunk / two-way transformer / memory attention",
+        "gemm_pct": "99.85-100 linear",
+        "nvfp4": "plausible in principle, immaterial in practice",
+        "note": "measured 26.8M-212.0M params for the trunk, 3.29M for the two-way transformer, 5.92M for memory attention; no checkpoint is present locally"
+      },
+      {
+        "component": "SAM 2 FPN neck / mask upsample / depthwise CXBlock",
+        "gemm_pct": 0.0,
+        "nvfp4": "not plausible",
+        "note": "conv-only"
+      },
+      {
+        "component": "samurai fusion and calibration core",
+        "gemm_pct": 0.0,
+        "nvfp4": "not applicable",
+        "note": "pure NumPy over expert tensors"
+      },
+      {
+        "component": "AIMLAPI multimodal experts",
+        "gemm_pct": 0.0,
+        "nvfp4": "not applicable",
+        "note": "hosted API; no local weights"
+      }
+    ]
+  },
+  "count_summary": {
+    "components_surveyed": 14,
+    "nvfp4_plausible": 6,
+    "nvfp4_plausible_but_low_value": 2,
+    "nvfp4_not_plausible": 5,
+    "not_applicable": 2,
+    "note": "plausible = GEMM-dominated with 16-divisible dimensions and a measured native FP4 kernel at its shape"
+  },
+  "access_findings": {
+    "sam3_1_official_api": "no Meta-hosted or major-provider hosted SAM 3.1 inference endpoint found; the official checkpoint is the only sanctioned route",
+    "sam3_1_checkpoint_gated": true,
+    "sam3_1_ungated_mirrors": [
+      "Reza2kn/sam3.1-nvfp4-detector-no-language",
+      "Lutianming/SAM3.1-comfyui-fp8",
+      "mlx-community/sam3-nvfp4",
+      "mlx-community/sam3-4bit"
+    ],
+    "existing_nvfp4_sam3_1_artifact": {
+      "repo": "Reza2kn/sam3.1-nvfp4-detector-no-language",
+      "format": "custom_nvfp4_e2m1_e4m3_scales",
+      "block_size": 16,
+      "scale_rule": "static_6",
+      "quantized_scope": "detector.* only, excluding detector.backbone.language_backbone.*",
+      "quantized_params": 472113408,
+      "kept_fp32_params": 402252268,
+      "total_params": 874365676,
+      "quantized_parameter_fraction": 0.5399,
+      "reported_fidelity": {
+        "mean_foreground_iou": 0.988,
+        "pixel_agreement": 0.99897,
+        "threshold": 0.35
+      },
+      "critical_caveats": [
+        "runtime_note states it is a storage-size quantization whose loader dequantizes weights before execution; native packed-FP4 execution remains future work",
+        "scale_rule is static_6, meaning the scale is not derived from a calibration distribution",
+        "max_measured_tensor_rel_l2 in the config is 0.0 and every entry of quant_error_report.json is null, so the artifact ships no usable per-tensor error evidence",
+        "the reported IoU was measured on food/mukbang video frames with a human-part exclusion mask, not on the samurai use case"
+      ]
+    },
+    "void_checkpoints_ungated": true,
+    "sam2_1_checkpoints_ungated": [
+      "facebook/sam2.1-hiera-large",
+      "facebook/sam2.1-hiera-base-plus",
+      "facebook/sam2.1-hiera-small"
+    ],
+    "sam2_1_download_host": "dl.fbaipublicfiles.com via third_party/sam2/checkpoints/download_ckpts.sh"
+  },
+  "fleet": [
+    {
+      "host": "strix",
+      "gpu": "RTX 5070 Laptop",
+      "cc": "12.0",
+      "vram_mib": 8151,
+      "state": "shared; a live embed service holds ~5.3 GiB"
+    },
+    {
+      "host": "b550",
+      "gpu": "2x RTX 3090 Ti",
+      "cc": "8.6",
+      "vram_mib": 24564,
+      "state": "reachable; Ampere has no native FP4 tensor cores"
+    },
+    {
+      "host": "tetra",
+      "gpu": "4x RTX PRO 6000 Blackwell",
+      "cc": "12.0",
+      "vram_mib": 97887,
+      "state": "occupied by root-owned vLLM TP workers; guest-owned, read-only probes only"
+    }
+  ],
+  "non_claims": [
+    "No SAM 3.1 checkpoint was downloaded, loaded, or executed.",
+    "No VOID checkpoint was downloaded, loaded, or executed; no Pass 1 or Pass 2 inference was run.",
+    "No mask, quadmask, or output video was produced.",
+    "No end-to-end segmentation or inpainting quality was measured; the mask-boundary experiment used synthetic logits, not real model output.",
+    "The reported GEMM speeds are single-layer microbenchmarks at the models' shapes, not model-level throughput; attention, convolutions, normalization, and diffusion sampling overhead are excluded.",
+    "No quantized checkpoint was produced, and no calibrated NVFP4 artifact was built or validated.",
+    "The FP8 and NVFP4 error figures come from random-BF16 tensors, not from real model weights, so they bound the format's error floor rather than any particular layer's error.",
+    "The SAM 3.1 source audit and the SAM 2 audit are static source readings at the pinned revisions; neither worker loaded a checkpoint.",
+    "Hosted-API availability was researched from public model pages and the Hugging Face API, not by calling a provider endpoint."
+  ]
+}

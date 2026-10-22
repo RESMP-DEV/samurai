@@ -99,6 +99,8 @@ Source-verified facts that shape the implementation:
 | VOID Pass 2 | Implemented command path, optional execution | Run only when temporal-consistency metrics justify the extra GPU pass |
 | Apple MPS route | Not claimed | Requires a source-reviewed SAM 3.1 MPS fork and live output equivalence |
 | Similar-repository expansion | Research evidence records candidates | Add code only when it supplies a bounded executable capability |
+| NVFP4 low-precision lane | Source-verified candidate set recorded; native FP4 GEMM measured on SM120 at the models' own shapes, but W4A4 is required for the speedup and the FP4 weight error does not survive the mask decision boundary intact | Promote only after a real checkpoint is calibrated with trimmed activation amax, a W4A4 runtime replaces the dequantizing weight-only path, and mask agreement on real interaction cases is measured against a BF16 baseline |
+| Calibration corpus for the low-precision lane | No corpus defined yet | Define the frame and prompt set, the trimmed amax rule, and the accepted error budget before any quantized artifact is published |
 
 ## Delivery order
 
@@ -183,3 +185,44 @@ Source-verified facts that shape the implementation:
   external API or model-quality claim is made.
 - Validation and worker outcomes are consolidated in
   [spatial expert ensemble evidence](../evidence/spatial-expert-ensemble-2026-10-21.json).
+
+### 2026-10-21, local constituent quantization survey
+
+- Surveyed every locally present constituent of the VOID+Model stack for a
+  low-precision path: the pinned Netflix VOID checkout, the pinned Meta SAM 3
+  checkout, the frozen SAM 2/SAMURAI tree, the canonical fusion and
+  calibration core, and the hosted AIMLAPI experts.
+- Recorded that neither upstream tree carries any quantization support. VOID's
+  existing `model_cpu_offload_and_qfloat8` mode is a weight cast to
+  `torch.float8_e4m3fn` with an autocast wrapper, not an FP8 tensor-core GEMM
+  path. SAM 3 and the frozen SAM 2 tree contain no quantizer, no observer, and
+  no `scaled_mm` call at all.
+- Counted parameters from safetensors headers read over HTTP range requests
+  without downloading weights. The VOID Pass 1 and CogVideoX transformers are
+  5.57B parameters with 85.4% GEMM-shaped weights, the T5-XXL encoder is 2.50B
+  with 100% GEMM-shaped weights, and the CogVideoX VAE is 215M with 0%
+  GEMM-shaped weights because it is entirely convolutional.
+- Measured NVFP4 directly on Blackwell SM120 at those models' own GEMM
+  shapes. The native kernel
+  `cutlass3x_sm120_bstensorop_s16864gemm_block_scaled_ue4m3xe2m1` was
+  observed and reached 206-279 TFLOP/s against 33-46 TFLOP/s for BF16, a
+  5.1x to 7.4x speedup with roughly 0.134 relative L2 error.
+- Established that the speedup depends on quantizing activations as well as
+  weights. A weight-only NVFP4 path dequantizes back to BF16 before the GEMM
+  and measured 0.99x to 1.05x, so it buys memory but no compute.
+- Established that the two kinds of calibration behave differently. The weight
+  per-tensor global scale is not the error driver, because the 16-element block
+  scale absorbs weight outliers; the activation per-tensor scale is the error
+  driver, and one outlier batch in a calibration set inflated it enough to
+  produce 0.90 relative error against 0.43 for trimmed calibration.
+- Measured that the FP4 weight error does not survive the segmentation
+  decision boundary intact: thresholded masks agreed on about 97% of pixels
+  with IoU between 0.92 and 0.94 at realistic layer shapes.
+- Recorded that `facebook/sam3.1` is a manually gated repository that this
+  machine cannot read, that an ungated mirror republishes a byte-identical
+  original checkpoint plus an existing NVFP4 artifact, and that this artifact
+  is a storage-size quantization with a static scale rule, a null per-tensor
+  error report, and a loader that dequantizes before execution.
+- Evidence, per-component verdicts, and non-claims are consolidated in
+  [quantization survey evidence](../evidence/quantization-survey-2026-10-21.json).
+  No checkpoint was downloaded and no model was executed in this survey.
