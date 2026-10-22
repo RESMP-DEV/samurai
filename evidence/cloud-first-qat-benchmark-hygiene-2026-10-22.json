@@ -1,0 +1,169 @@
+{
+  "recorded_at": "2026-10-22T13:02:00-07:00",
+  "agent": "Codex main session with two read-only MiniMax M3.1 Flash CCR workers",
+  "purpose": "Correct hardware planning to a cloud-capability-first policy, assess VOID NVFP4 QAT feasibility, and establish benchmark anti-leakage rules.",
+  "source": {
+    "revision": "fdb8700c1ac31be45caeadd8953f112b8591017c",
+    "dirty": false,
+    "void_revision": "e3914f8f551dd4b880661991fd6b28cd1699a97a",
+    "sam3_revision": "7f473cfd983d5eb43040ff608f66bff0d7bdcb53"
+  },
+  "policy_correction": {
+    "rule": "Heavy model work is planned against arbitrary cloud hardware and software. Locally attached GPUs are never used as a feasibility ceiling, speed ceiling, memory ceiling, or comparison baseline.",
+    "reason": "NVFP4 QAT and video-diffusion finetuning require selecting a target numerical format and runtime first, then provisioning the matching on-demand cloud environment.",
+    "durable_change": "AGENTS.md now records the cloud-capability-first and benchmark-role-separation contracts."
+  },
+  "model_adaptability_ranking": {
+    "void_transformer": {
+      "status": "officially_finetunable",
+      "evidence": [
+         "official paired-data trainer with rgb_full, rgb_removed, quadmask, background caption, and optional warped noise",
+         "VAE and T5 are frozen while the transformer is trainable",
+         "default Pass 1 recipe trains all transformer modules and uses DeepSpeed ZeRO-2",
+         "Pass 2 has a separate warped-noise fine-tuning script"
+      ],
+      "conclusion": "VOID adaptation is materially more direct than SAM 3.1 multiplex adaptation."
+    },
+    "sam3_image_model": {
+      "status": "officially_finetunable",
+      "conclusion": "A viable route for affected-region noun/mask adaptation, but it is not the SAM 3.1 multiplex video model."
+    },
+    "sam31_multiplex": {
+      "status": "no_ready_video_finetune_recipe",
+      "conclusion": "Text/point/box conditioning is available, but direct mask conditioning and an official multiplex video fine-tuning recipe are absent. A four-class quadmask head would require new architecture and target handling."
+    }
+  },
+  "nvfp4_qat_feasibility": {
+    "verdict": "Plausible and precedented, but not available by simply enabling a flag in the pinned VOID checkout.",
+    "existing_machinery": [
+      {
+        "name": "TorchAO NVFP4 QAT",
+        "facts": [
+          "NVFP4FakeQuantizedLinear performs an NVFP4 forward and a dequantized/fake-quantized backward",
+          "prepare converts eligible nn.Linear modules and convert emits the target quantized model",
+          "activation and weight configs must both be supplied; weight-only NVFP4 QAT is explicitly unsupported",
+          "the current implementation is Blackwell-oriented and has no pre-Blackwell emulation guarantee"
+        ],
+        "url": "https://github.com/pytorch/ao/blob/main/torchao/prototype/qat/nvfp4.py"
+      },
+      {
+        "name": "TorchAO QAT workflow",
+        "facts": [
+          "QATConfig supports NVFP4DynamicActivationNVFP4WeightConfig as a base config",
+          "prepare inserts fake quantization and convert applies the deployment format after training",
+          "static activation calibration exists for Intx affine QAT, not the NVFP4 path"
+        ],
+        "url": "https://github.com/pytorch/ao/blob/main/docs/source/workflows/qat.md"
+      },
+      {
+        "name": "NVIDIA ModelOpt",
+        "facts": [
+          "provides NVFP4 fake-quantization kernels and diffusion presets",
+          "supports learnable scale/amax methods and SVDQuant-style low-rank outlier handling in external recipes"
+        ],
+        "url": "https://github.com/NVIDIA/ModelOptimizer"
+      },
+      {
+        "name": "QVGen",
+        "facts": [
+          "video-diffusion QAT at 3-4 bits",
+          "includes CogVideoX",
+          "uses auxiliary error modules with rank decay so they do not remain at inference"
+        ],
+        "url": "https://arxiv.org/html/2505.11497"
+      }
+    ],
+    "trainability": {
+      "weights": "Eligible transformer Linear weights can receive straight-through/fake-quant gradients and become robust to NVFP4 rounding.",
+      "block_scales": "The E4M3 16-element block scales are generally computed from weights; ModelOpt-style learnable amax/LSQ is an external route for making scale parameters trainable.",
+      "activation_global_scale": "TorchAO NVFP4 QAT computes the per-tensor activation scale from runtime amax rather than training it as a parameter. QAT can make weights robust to that dynamic behavior.",
+      "activation_block_scales": "The public TorchAO NVFP4 path computes activation block scales dynamically, not through a learned observer."
+    },
+    "environment_boundary": {
+      "pinned_void": "PyTorch 2.7.1 and its custom CogVideoX loader/trainer.",
+      "qat_lane": "A separate modern Blackwell-capable PyTorch/TorchAO or ModelOpt research lane is required. The exact runtime is selected by the pinned QAT implementation and native kernel requirements, not by any local machine.",
+      "checkpoint_boundary": "The BF16 teacher/reference remains in the pinned VOID environment; the QAT lane exports an artifact only after parity and quality gates pass."
+    },
+    "recommended_qat_sequence": [
+      "Provision an on-demand Blackwell-class cloud lane matching the selected TorchAO/ModelOpt commit; do not use spot/preemptible capacity for a training run.",
+      "Establish a BF16 cloud teacher baseline on fixed generated train/calib/dev splits.",
+      "Measure NVFP4 PTQ with trimmed, timestep-aware activation statistics before spending on QAT.",
+      "If PTQ misses quality, run transformer-only NVFP4 QAT on eligible Linear layers while keeping norms, patch/projection sensitivity tests, VAE, and T5 outside the low-bit target.",
+      "Add scale learning or an SVDQuant/QVGen-style low-rank auxiliary branch only after plain NVFP4 QAT is attributed layer-by-layer.",
+      "Add Q-VDiT-style temporal distillation if temporal consistency remains the dominant regression.",
+      "Convert, export, and serve in a separate inference lane; compare against the BF16 teacher on identical seeds and inputs."
+    ],
+    "training_design": {
+      "target_modules": "CogVideoXBlock attention projections and feed-forward Linear layers are the first target set; patch embedding and output projection require separate sensitivity gates.",
+      "keep_high_precision": [
+        "LayerNorm and AdaLN parameters",
+        "VAE",
+        "T5 unless a separate encoder PTQ experiment proves a benefit",
+        "output/proj-out until ablated",
+        "non-Linear and shape-sensitive operations"
+      ],
+      "timestep_sampling": "Use the actual inference schedules and stratified high/mid/low-noise bins; training's uniform 1000-bin sampler alone does not guarantee coverage of the 30-step Pass 1 or 50-step Pass 2 schedules.",
+      "cfg_branches": "Calibrate and evaluate Pass 1 CFG-off separately from Pass 2 CFG-on.",
+      "passes": "Train or calibrate Pass 1 and Pass 2 as separate distributions and checkpoints.",
+      "teacher": "Use a frozen same-weight BF16 teacher for velocity/output distillation and temporal diagnostics."
+    },
+    "quality_gates": [
+      "per-layer output error and activation-scale error against the BF16 teacher",
+      "paired-video PSNR/SSIM plus LPIPS/DreamSim-or-DINOv2",
+      "quadmask class fidelity and affected-region false-positive regression",
+      "Pass 1 versus Pass 2 temporal stability and flicker",
+      "fixed-seed output digests, median/p95 latency, peak memory, and cloud cost"
+    ]
+  },
+  "benchmark_hygiene": {
+    "license_does_not_prevent_leakage": {
+      "finding": "CC BY-NC may reduce incidental commercial redistribution, but it is not a split rule and does not remove public test annotations.",
+      "stronger_rule": "The SAM 3 paper explicitly states that its benchmark is for model evaluation and should not be used for training.",
+      "commercial_boundary": "NC-licensed media is especially unsuitable for client-facing training; use generated or commercially licensed data for client adaptations."
+    },
+    "sam_co_state": [
+      "Gold, Silver, and VEval annotation repositories use SAM License terms rather than a blanket CC BY-NC term.",
+      "SA-V and YT-Temporal VEval media are packaged CC-BY-NC 4.0; SmartGlasses media are CC-BY-4.0.",
+      "Gold/Silver/VEval test annotations are public after gated access; there is no hidden submission server.",
+      "Public benchmark media overlap concerns exist because SAM 3 reports in-domain training pools and evaluation domains from related sources."
+    ],
+    "corpus_roles": [
+      "train: gradient fitting only",
+      "calib: quantization activation statistics, expert calibration, thresholds, and prompt selection only",
+      "dev: repeated model selection and ablations only",
+      "lockbox/eval: final untouched scoring only"
+    ],
+    "hard_rules": [
+      "No eval artifact may enter any training, QAT, expert-calibration, prompt-tuning, ensemble-weight, or hyperparameter-search input.",
+      "Splits are by source asset or source sequence, never by frame or generated clip.",
+      "Every row records dataset/source revision, license, intended role, access date, file digest, and derived-artifact digest.",
+      "Before fitting, perform media-level deduplication against eval and lockbox using sampled-frame hashes/perceptual hashes and embeddings.",
+      "Kubric generation pins the generator revision, GSO asset-list digest, asset split, camera/physics seeds, and zero asset-ID intersection across roles.",
+      "HUMOTO splits by original motion sequence and requires its external access/license terms.",
+      "YouTube-derived benchmarks are pinned by extracted-frame digests because video re-download can shift frames.",
+      "Scores on public test annotations are labeled offline test-set measurements, not untouched generalization claims."
+    ],
+    "generated_benchmark": "Build the primary clean benchmark from newly generated Kubric counterfactual pairs with disjoint asset IDs and a separately generated lockbox. Treat it as a reimplementation, not as Netflix's unreleased paper benchmark."
+  },
+  "worker_evidence": [
+    {
+      "report": "build/research/void-qat-nvfp4-options.txt",
+      "outcome": "completed",
+      "parent_validation": "Parent directly verified TorchAO NVFP4FakeQuantizedLinear/QAT workflow and VOID's transformer-only training/freezing behavior from public source and pinned checkout."
+    },
+    {
+      "report": "build/research/cloud-benchmark-leakage-options.txt",
+      "outcome": "completed",
+      "parent_validation": "Parent verified SAM benchmark availability/license structure and adopted the stronger eval-only, role-separated provenance protocol."
+    }
+  ],
+  "non_claims": [
+    "No cloud job was launched and no spend was incurred.",
+    "No VOID/SAM checkpoint was downloaded, loaded, trained, quantized, converted, or benchmarked.",
+    "No QAT implementation was added to samurai or to the pinned VOID checkout.",
+    "TorchAO, ModelOpt, QVGen, Q-VDiT, SVDQuant, and DeltaQuant findings are source/public-document evidence, not local execution results.",
+    "No benchmark dataset was downloaded or evaluated.",
+    "The exact cloud GPU vendor, region, instance count, and modern QAT runtime remain an implementation decision gated by live capability and cost probes.",
+    "CC BY-NC or SAM License terms do not authorize client-facing reuse by themselves; each source's actual terms must be reviewed before commercial adaptation."
+  ]
+}

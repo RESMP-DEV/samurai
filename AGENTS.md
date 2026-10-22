@@ -42,6 +42,21 @@ Actions workflows or publish through an external upstream.
   3.12, PyTorch 2.10/CUDA 12.6+ and Meta's SAM License; VOID pins its own
   PyTorch 2.7.1 environment in its reference checkout. Do not force them into
   one environment or silently substitute one model for the other.
+- Plan heavy model work cloud-capability-first. Select target cloud hardware,
+  runtime, precision, and cost from the numerical-format/kernel requirements of
+  the experiment. Never reject an architecture, QAT route, benchmark, or model
+  size because of the GPUs currently attached to local machines; local probes
+  are operational observations only, not feasibility ceilings.
+- Keep benchmark, fitting, and calibration corpora separated by immutable role.
+  Public benchmark sets are evaluation-only. No benchmark frame, mask, prompt,
+  target video, or derived tensor may enter fine-tuning, QAT calibration,
+  expert calibration, prompt tuning, or hyperparameter search. Generated
+  counterfactual corpora split by asset or source sequence before any fitting,
+  and every corpus row carries source, license, role, and digest provenance.
+- Keep an NVFP4/QAT research lane separate from the pinned VOID reference
+  environment. A modern Blackwell-capable QAT lane must reproduce BF16 teacher
+  behavior before replacing the reference path; do not silently upgrade or
+  mutate the pinned checkout.
 - External model repositories and checkpoints are immutable inputs. Record
   exact revisions/paths in receipts; do not edit them from this repository.
 - `third_party/` is dated observation only. Changes there are limited to

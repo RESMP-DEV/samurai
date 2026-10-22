@@ -102,7 +102,7 @@ Source-verified facts that shape the implementation:
 | NVFP4 low-precision lane | Source-verified candidate set recorded; native FP4 GEMM measured on SM120 at the models' own shapes, but W4A4 is required for the speedup and the FP4 weight error does not survive the mask decision boundary intact | Promote only after a real checkpoint is calibrated with trimmed activation amax, a W4A4 runtime replaces the dequantizing weight-only path, and mask agreement on real interaction cases is measured against a BF16 baseline |
 | Calibration corpus for the low-precision lane | No corpus defined yet | Define the frame and prompt set, the trimmed amax rule, and the accepted error budget before any quantized artifact is published |
 | Hosted SAM 3.1 lane | Meta Model API serves `sam-3.1` at `https://api.meta.ai/v1` over the OpenAI-compatible Responses API, returning boxes and binary masks per frame | Build the adapter and measure mask fidelity against the local SAM 3.1 lane on the same clips before preferring either path |
-| Quantization need at all | The full stack is 18.3 GB in BF16 and fits one 96 GB card, so quantization buys speed rather than capacity | Quantify real end-to-end throughput on the target host before investing in a quantized artifact |
+| Quantization need at all | Cloud-capability-first: quantify BF16, FP8/W8A8, and NVFP4/W4A4 against the selected target runtime; local attached GPUs are not feasibility or sizing limits | Require paired end-to-end quality, latency, memory, cost, and fixed-seed digest evidence before promoting a low-bit artifact |
 
 ## Delivery order
 
@@ -442,3 +442,47 @@ Source-verified facts that shape the implementation:
 - Full conditioning, benchmark, calibration-corpus, hardware, quality-gate, and
   non-claim details are consolidated in
   [SAM conditioning and benchmark evidence](../evidence/sam31-conditioning-void-benchmark-mixed-precision-2026-10-22.json).
+
+### 2026-10-22, cloud-first QAT and benchmark hygiene correction
+
+- Corrected compute planning to cloud-capability-first. Architecture, QAT,
+  benchmark, and model-size choices are selected from the required numerical
+  format, kernel, runtime, quality, and cost target. GPUs currently attached to
+  local machines are operational observations only and are never feasibility or
+  sizing ceilings. This rule is now explicit in `AGENTS.md`.
+- Ranked adaptation difficulty. VOID is the strongest fine-tuning surface because
+  it ships paired counterfactual-video training, exact quadmask conditioning,
+  frozen VAE/T5, a trainable transformer, DeepSpeed recipes, and a separate
+  Pass 2 warped-noise trainer. SAM 3 image fine-tuning is also supported, but
+  SAM 3.1 multiplex has no ready video fine-tuning recipe and no direct dense
+  mask-conditioning request.
+- Verified that NVFP4 QAT is real ecosystem machinery rather than speculation.
+  TorchAO provides `NVFP4FakeQuantizedLinear`, a quantized forward with
+  dequantized/fake-quantized backward, and `QATConfig` prepare/convert steps.
+  Weight-only NVFP4 QAT is unsupported: the route is W4A4. NVIDIA ModelOpt adds
+  learnable-scale and low-rank outlier recipes, while QVGen provides direct
+  3-4-bit video-DiT QAT precedent including CogVideoX.
+- The missing piece is integration, not concept. Pinned VOID uses its own
+  PyTorch 2.7.1 training environment; NVFP4 QAT requires a separate modern
+  Blackwell-capable research lane with module swapping, teacher/distillation
+  hooks, timestep-stratified sampling, separate CFG/pass statistics, and a
+  conversion/export path. The pinned BF16 reference environment remains the
+  teacher and acceptance baseline.
+- The first QAT sequence is PTQ-before-QAT: establish a cloud BF16 teacher,
+  measure timestep-aware NVFP4 PTQ, then train eligible transformer Linear
+  layers with NVFP4 W4A4 fake quantization. Add ModelOpt-style scale learning,
+  an SVDQuant/QVGen-style low-rank auxiliary, or Q-VDiT-style temporal
+  distillation only after layer attribution shows which failure remains.
+- Corrected benchmark-license reasoning. CC BY-NC may reduce incidental
+  commercial redistribution, but it is not a train/test split and does not
+  remove public test annotations. SAM's stronger rule is explicit: its
+  benchmark is evaluation-only and must not be used for training. NC media also
+  requires extra caution for client-facing adaptations.
+- Added immutable corpus roles in `AGENTS.md`: train, calib, dev, and
+  lockbox/eval are physically and cryptographically separated. No eval frame,
+  mask, prompt, target, or derived tensor may enter gradient training, QAT
+  calibration, expert calibration, prompt tuning, or hyperparameter search.
+  Generated Kubric/HUMOTO corpora split by asset or source sequence and record
+  source, license, role, and digest provenance.
+- Full cloud-first QAT and anti-leakage findings are consolidated in
+  [cloud-first QAT evidence](../evidence/cloud-first-qat-benchmark-hygiene-2026-10-22.json).
