@@ -25,6 +25,12 @@ Actions workflows or publish through an external upstream.
 - Treat expert fusion as a numerical contract: probability inputs are converted
   to logits before temperature scaling; weights are normalized; dynamic weights
   are recorded per frame; and tensor dimensions/frame counts must align exactly.
+- Keep calibration label-free and bounded. Latent classes are exchangeable
+  without labels, so the positive class follows the panel mean-vote convention
+  and is never presented as ground truth. Fusion and calibration must share one
+  probability transform.
+- Calibration requires at least three aligned tensor experts; two label-free
+  raters are not identifiable and must fail closed.
 - Keep spatial fusion bounded. Batch size is reduced according to frame pixels
   and `max_batch_pixels`; command experts receive only the current batch; output
   masks are written incrementally.
@@ -72,6 +78,7 @@ its own checkout according to that pinned revision. Never use pip directly.
 | --- | --- | --- |
 | CLI and model adapters | `src/samurai/` | Prompt contracts, video I/O, errors |
 | Expert fusion | `src/samurai/ensemble.py` | Weighted sigmoid field, dynamic weights, support, top-k, batching |
+| Expert calibration | `src/samurai/calibration.py` | Label-free Bernoulli Dawid-Skene EM, confidence weights, generated config |
 | AIMLAPI expert adapter | `scripts/aimlapi_expert.py` | Frame-batch request/response and coordinate-region contract |
 | Verification | `scripts/` | Check domains, tests, receipt format |
 | Runtime examples | `configs/` | Portable examples only, no private paths |

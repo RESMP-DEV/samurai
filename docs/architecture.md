@@ -18,6 +18,7 @@ identity plus an executable contract, not as a copy of undocumented code.
 | SAM 3.1 adapter | `src/samurai/sam31.py` | Absolute prompts normalized to request API; complete forward-frame mask video |
 | Media/mask encoding | `src/samurai/media.py`, `src/samurai/quadmask.py` | Lossless gray yuv444p and exact VOID four-value semantics |
 | Expert fusion | `src/samurai/ensemble.py` | Aligned tensors, temperature scaling, dynamic weights, support, top-k, bounded batches |
+| Expert calibration | `src/samurai/calibration.py` | Label-free Bernoulli Dawid-Skene EM, bounded sampling, confidence weights, generated config |
 | Multimodal adapters | `scripts/aimlapi_expert.py` | One request per frame batch; normalized coordinate JSON only |
 | VOID execution | `src/samurai/void.py` | Sequence validation, Pass 1 command, optional Pass 2 command |
 | Verification | `scripts/check_*.py`, `scripts/tests/` | One check domain per script and stale-receipt-safe receipts |
@@ -58,6 +59,7 @@ Source-verified facts that shape the implementation:
 | Primary-mask video generation | implemented/exercised against fake predictor | Real ffmpeg media round trips; no SAM checkpoint |
 | VOID quadmask sequence builder | implemented/exercised | Tiny local videos; no VOID model call |
 | Multi-model spatial ensemble | implemented/exercised with tensors and fake command experts | Real ffmpeg output; no external multimodal API or quality claim |
+| Label-free expert calibration | implemented/exercised with synthetic aligned tensors | Agreement metrics on synthetic panels; no real-model or live-run claim |
 | AIMLAPI coordinate adapter | implemented | Payload/parser tests only; no live API call |
 | VOID Pass 1/Pass 2 command orchestration | implemented | Path and command tests/dry run; no GPU run |
 | SAM 2/SAMURAI historical tree | classified as frozen observation | Moved under `third_party/`; canonical imports rejected by check |
@@ -91,6 +93,7 @@ Source-verified facts that shape the implementation:
 | --- | --- | --- |
 | Affected-region reasoning | User supplies affected mask; no VLM/GUI path | A reviewed model must produce calibrated `127` regions and beat a baseline on real interaction cases |
 | Dynamic expert weighting | Entropy confidence by default | Promote another estimator only with real interaction-case calibration and quality evidence |
+| Label-free confidence weights | Dawid-Skene agreement weights from `samurai calibrate` | Promote to the default fusion weight only with a real expert panel and measured interaction-case benefit |
 | AIMLAPI model panel | MiMo V2.5, Gemini 3.8 Flash, and Dola Seed 2.0 Pro examples | A live run must pin served model identity and retain sanitized structured responses |
 | SAM 3.1 FlashAttention 3 | Disabled by default for portability | Enable only after a CUDA A/B run proves correctness and speed with the pinned checkpoint |
 | VOID Pass 2 | Implemented command path, optional execution | Run only when temporal-consistency metrics justify the extra GPU pass |
@@ -115,6 +118,12 @@ Source-verified facts that shape the implementation:
 - Mask values and first-frame convention are compatibility boundaries.
 - Probability inputs pass through logit conversion before temperature scaling;
   no expert is treated as a binary authority.
+- Fusion and calibration share one probability transform, so a weight fitted
+  in one domain applies to the other.
+- Latent classes stay label-free. The positive class follows the panel mean
+  vote convention and is never presented as ground truth.
+- Calibration requires at least three aligned tensor experts. Two label-free
+  raters cannot identify skill separately from class polarity.
 - External multimodal text responses enter only after reproducible coordinate
   rasterization.
 - Media transcodes are tests only; actual experiments never use synthetic
@@ -135,6 +144,31 @@ Source-verified facts that shape the implementation:
   Actions workflow. No SAM 3.1 checkpoint or VOID model execution is claimed.
 - Validation and worker outcomes are consolidated in
   [project setup evidence](../evidence/project-setup-2026-10-21.json).
+
+### 2026-10-21, label-free expert calibration
+
+- Added `src/samurai/calibration.py`: a bounded Bernoulli Dawid-Skene EM
+  estimator over binary latent classes, with per-expert sensitivity and
+  false-positive rate, beta smoothing, a convergence tolerance, and a maximum
+  iteration count.
+- Expert reports enter as a sign plus a confidence weight, so a report near
+  0.5 moves the latent posterior far less than a decisive report. The
+  estimator reduces to classic Dawid-Skene at unit confidence.
+- The latent positive class is oriented toward the panel mean vote, with each
+  expert's agreement and the first expert's anchor agreement reported
+  separately. No ground truth is claimed.
+- Added the `samurai calibrate` subcommand with JSON output, a generated
+  ensemble config, a report path, and an optional latent-probability tensor.
+  The generated config preserves every path, prompt, temperature, and the
+  fusion block and replaces only the weights.
+  Calibration records per-frame latent/support/disagreement summaries and
+  SHA-256 provenance for the source config and every expert tensor.
+- Extracted the shared probability transform into
+  `ensemble.expert_probabilities` so fusion and calibration cannot diverge.
+- Focused tests cover latent recovery, expert ranking, pairwise summaries,
+  temperature handling, iteration bounds, degenerate panels, config
+  round-tripping, and fail-closed input handling. Validation lives in
+  [calibration evidence](../evidence/expert-calibration-2026-10-21.json).
 
 ### 2026-10-21, spatial expert triangulation
 

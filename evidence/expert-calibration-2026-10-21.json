@@ -1,0 +1,91 @@
+{
+  "recorded_at": "2026-10-21T17:24:12-07:00",
+  "agent": "Codex parent with CCR implementation worker and two read-only Codex auditors",
+  "validated_revision": "f81b29f1319c3d331a0cf967d00b9abac1514213",
+  "base_revision": "f81b29f1319c3d331a0cf967d00b9abac1514213",
+  "source_dirty": true,
+  "platform": {
+    "system": "Darwin",
+    "release": "25.6.0",
+    "machine": "arm64",
+    "python": "3.12.15",
+    "uv": "uv 0.13.1 (62faed335 2026-10-13 aarch64-apple-darwin)"
+  },
+  "implementation": [
+    "Added src/samurai/calibration.py, a bounded label-free powered Bernoulli Dawid-Skene estimator over binary latent mask classes.",
+    "Each expert report becomes a hard vote with confidence |2p-1|. The expectation step scales the Dawid-Skene likelihood ratio by report confidence; beta-smoothed maximisation fits per-expert sensitivity, false-positive rate, and positive prior.",
+    "Calibration requires at least three aligned tensor experts. Two label-free raters are non-identifiable and fail closed.",
+    "The positive latent class follows the panel mean-vote convention. Per-expert agreement and the first expert anchor agreement are separate report fields; no expert is a hidden authority.",
+    "Confidence weights normalize soft agreement above chance with the estimated latent field. Identical or wholly uninformative panels fall back to equal weights.",
+    "Reports retain detailed expert metrics, normalized confidence weights, latent positive/selected fractions, pairwise Dice/Brier/disagreement, and per-frame latent/support/disagreement summaries.",
+    "The generated ensemble config preserves paths, prompts, representations, temperatures, and fusion while replacing only weights. It carries source-config and expert-tensor SHA-256 provenance into both calibration and fusion reports.",
+    "Added the samurai calibrate CLI with smoothing, tolerance, iteration, sampling, pixel-budget, seed, latent-output, config-output, and report options.",
+    "Fusion and calibration now share ensemble.expert_probabilities, ensuring probability logit conversion and temperature scaling cannot diverge.",
+    "Fusion now fails closed on non-finite outputs, falls back to normalized base weights when every entropy weight is zero, and enforces the threshold as a minimum score floor in spatial top-k so an area quota cannot promote weak evidence."
+  ],
+  "verification": [
+    {
+      "command": "uv lock --check",
+      "exit_code": 0,
+      "result": "61-package lock consistent"
+    },
+    {
+      "command": "uv build",
+      "exit_code": 0,
+      "result": "source distribution and wheel built; wheel sha256 f3fffbaa6faf1bb2ae1d8dd700edfc7fa23822a3238c1144d19f0a95be2792ca"
+    },
+    {
+      "command": "just check",
+      "exit_code": 0,
+      "result": "instruction, workflow, and canonical-import contracts passed"
+    },
+    {
+      "command": "just quality",
+      "exit_code": 0,
+      "result": "ruff-check, ruff-format, shellcheck, ty, and 37 pytest tests passed"
+    },
+    {
+      "command": "uv run python -m pytest -q scripts/tests/test_calibration.py",
+      "exit_code": 0,
+      "result": "13 focused calibration tests passed"
+    },
+    {
+      "command": "samurai calibrate plus samurai ensemble on a three-expert synthetic media fixture",
+      "exit_code": 0,
+      "result": "EM converged in 163 iterations; agreement weights were anchor 0.682616, balanced 0.317383, semantic 0.0; fusion selected 0 pixels on frame 0 and 8 on frame 1; all three tensor hashes propagated into the fusion report"
+    }
+  ],
+  "worker_evidence": {
+    "implementation_worker": {
+      "outcome": "completed",
+      "run_dir": "/Users/kearm/.cache/ccr-worker-runs/20261021-165227-vv9097vt",
+      "use": "initial calibration module, CLI, tests, and documentation; parent reviewed and repaired the result"
+    },
+    "artifact_audit": {
+      "outcome": "completed",
+      "use": "identified canonical samurai schemas and confirmed that SAM 3.1 public output is binary masks plus per-object probability, not boundary logits; found Muse Glimmer and Muse Spark implementations but no aligned real expert tensors"
+    },
+    "math_audit": {
+      "outcome": "completed",
+      "use": "identified all-half entropy division, low-score top-k filler, label-free identifiability, and correlation limits; parent fixed the first two and documented the rest"
+    }
+  },
+  "data_boundary": [
+    "The only retained local ensemble fixture is synthetic. No aligned real tensors from SAM 3.1/SAMURAI, Muse Glimmer 30B, Muse Spark 1.3, or Muse Wonder were found on the audited local roots.",
+    "Muse Glimmer code exists under research/ml/FreeToken and Muse Spark code exists under mlx-lm, but the model environment/checkpoints needed for a real panel were not present in the audited roots.",
+    "Coordinate experts must first be materialized as aligned tensors before calibration; calibrate deliberately does not invoke external APIs."
+  ],
+  "non_claims": [
+    "Agreement-derived weights are not semantic accuracy, calibration against ground truth, or a model-quality claim.",
+    "A shared mistake across correlated experts can still receive high agreement; real panels require diversity and held-out interaction evidence.",
+    "No SAM 3.1 checkpoint, Muse model, external multimodal API, VOID model, CUDA inference, or real expert-panel run was exercised.",
+    "The CLI fixture is synthetic implementation evidence only; actual experiments do not use synthetic media as substitute evidence.",
+    "VOID quadmask values 0, 63, 127, and 255 and the first-frame convention are untouched.",
+    "Calibrated weights are not promoted as the repository default; promotion remains gated on a real expert panel and measured interaction-case benefit."
+  ],
+  "ignored_machine_artifacts": [
+    "build/reports/setup/receipt.json",
+    "build/reports/quality/receipt.json",
+    "build/demo-ensemble-calibrated/"
+  ]
+}

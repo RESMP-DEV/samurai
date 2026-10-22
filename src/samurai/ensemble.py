@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -104,6 +104,7 @@ class EnsembleConfig:
     input_video: Path
     experts: tuple[ExpertSpec, ...]
     fusion: FusionSpec
+    calibration: dict[str, Any] = field(default_factory=dict)
 
 
 def load_config(path: Path) -> EnsembleConfig:
@@ -142,6 +143,9 @@ def load_config(path: Path) -> EnsembleConfig:
     if sum(expert.weight for expert in experts) <= 0:
         raise EnsembleError("total expert weight must be positive")
     raw_fusion = raw["fusion"]
+    calibration = raw.get("calibration", {})
+    if not isinstance(calibration, dict):
+        raise EnsembleError("ensemble calibration must be an object")
     fusion = FusionSpec(
         mode=raw_fusion.get("mode", "top_k"),
         threshold=float(raw_fusion.get("threshold", 0.5)),
@@ -159,6 +163,7 @@ def load_config(path: Path) -> EnsembleConfig:
         input_video=Path(raw["input_video"]).expanduser(),
         experts=tuple(experts),
         fusion=fusion,
+        calibration=calibration,
     )
 
 
@@ -312,6 +317,39 @@ class CommandExpertSource:
         return np.stack(grids)
 
 
+def expert_probabilities(values: np.ndarray, specs: Sequence[ExpertSpec]) -> np.ndarray:
+    """Convert aligned expert values into calibrated probabilities.
+
+    Probability inputs are converted to logits before temperature scaling, and
+    logit inputs are scaled directly. Fusion and calibration share this single
+    transform so that a weight fitted on one domain applies to the other.
+    """
+    if values.ndim != 4:
+        raise EnsembleError("expert batch must have experts,frames,height,width shape")
+    if values.shape[0] != len(specs):
+        raise EnsembleError("expert count does not match tensor count")
+    if not np.isfinite(values).all():
+        raise EnsembleError("expert values contain NaN or infinity")
+    for index, spec in enumerate(specs):
+        if spec.representation == "probabilities" and (
+            np.min(values[index]) < 0 or np.max(values[index]) > 1
+        ):
+            raise EnsembleError(f"expert {spec.name}: probabilities must be in [0,1]")
+    return np.stack(
+        [
+            _sigmoid(
+                (
+                    _logit(values[index])
+                    if specs[index].representation == "probabilities"
+                    else values[index]
+                )
+                / specs[index].temperature
+            )
+            for index in range(len(specs))
+        ]
+    )
+
+
 def _effective_weights(
     probabilities: np.ndarray, base_weights: np.ndarray, mode: str
 ) -> np.ndarray:
@@ -326,6 +364,8 @@ def _effective_weights(
     confidence = 1.0 - entropy
     dynamic = confidence * base_weights[:, None]
     totals = np.sum(dynamic, axis=0, keepdims=True)
+    if not np.all(totals > 0):
+        return np.broadcast_to(base_weights[:, None], probabilities.shape[:2])
     return dynamic / totals
 
 
@@ -341,34 +381,13 @@ def fuse_batch(
     fusion: FusionSpec,
 ) -> tuple[np.ndarray, np.ndarray, list[dict[str, float]]]:
     """Fuse aligned expert values into masks and report effective weights."""
-    if values.ndim != 4:
-        raise EnsembleError("expert batch must have experts,frames,height,width shape")
-    if values.shape[0] != len(specs):
-        raise EnsembleError("expert count does not match tensor count")
-    if not np.isfinite(values).all():
-        raise EnsembleError("expert values contain NaN or infinity")
-    for index, item in enumerate(specs):
-        if item.representation == "probabilities" and (
-            np.min(values[index]) < 0 or np.max(values[index]) > 1
-        ):
-            raise EnsembleError(f"expert {item.name}: probabilities must be in [0,1]")
-    probabilities = np.stack(
-        [
-            _sigmoid(
-                (
-                    _logit(values[index])
-                    if specs[index].representation == "probabilities"
-                    else values[index]
-                )
-                / specs[index].temperature
-            )
-            for index in range(len(specs))
-        ]
-    )
+    probabilities = expert_probabilities(values, specs)
     base_weights = np.asarray([spec.weight for spec in specs], dtype=np.float64)
     base_weights = base_weights / np.sum(base_weights)
     weights = _effective_weights(probabilities, base_weights, fusion.dynamic_weights)
     combined = np.sum(probabilities * weights[..., None, None], axis=0, dtype=np.float64)
+    if not np.isfinite(combined).all() or not np.isfinite(weights).all():
+        raise EnsembleError("fused probabilities contain NaN or infinity")
     support = np.sum(probabilities > fusion.support_threshold, axis=0)
     eligible = support >= fusion.min_expert_support
     masks = np.zeros(combined.shape, dtype=bool)
@@ -378,7 +397,7 @@ def fuse_batch(
             continue
         flat_probability = frame_probability.reshape(-1)
         flat_eligible = eligible[frame_index].reshape(-1)
-        candidates = np.flatnonzero(flat_eligible)
+        candidates = np.flatnonzero(flat_eligible & (flat_probability >= fusion.threshold))
         if candidates.size:
             selected_count = min(
                 _selected_count(fusion.top_k_ratio, flat_probability.size),
@@ -476,6 +495,7 @@ def run_ensemble(
             "min_expert_support": config.fusion.min_expert_support,
             "support_threshold": config.fusion.support_threshold,
         },
+        **({"calibration": config.calibration} if config.calibration else {}),
         "batches": [len(batch) for batch in batches],
         "frames_report": frame_reports,
     }

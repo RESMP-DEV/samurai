@@ -13,6 +13,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from .calibration import BetaSmoothing, CalibrationSettings, calibrate_config
 from .ensemble import load_config as load_ensemble_config
 from .ensemble import run_ensemble
 from .quadmask import build_sequence
@@ -157,6 +158,30 @@ def _ensemble(args: argparse.Namespace) -> int:
     return 0
 
 
+def _calibrate(args: argparse.Namespace) -> int:
+    settings = CalibrationSettings(
+        positive_prior=BetaSmoothing(args.positive_prior_alpha, args.positive_prior_beta),
+        sensitivity=BetaSmoothing(args.sensitivity_alpha, args.sensitivity_beta),
+        false_positive_rate=BetaSmoothing(
+            args.false_positive_rate_alpha, args.false_positive_rate_beta
+        ),
+        tolerance=args.tolerance,
+        max_iterations=args.max_iterations,
+        max_samples=args.max_samples,
+        max_batch_pixels=args.max_batch_pixels,
+        seed=args.seed,
+    )
+    report = calibrate_config(
+        args.config,
+        args.config_output,
+        args.report,
+        settings,
+        latent_output=args.latent_output,
+    )
+    _emit(report)
+    return 0
+
+
 def _void(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     results = execute(config, dry_run=args.dry_run)
@@ -208,6 +233,31 @@ def parser() -> argparse.ArgumentParser:
     ensemble.add_argument("--output", type=Path, required=True)
     ensemble.add_argument("--report", type=Path, required=True)
     ensemble.set_defaults(handler=_ensemble)
+
+    calibrate = subparsers.add_parser(
+        "calibrate",
+        help="estimate label-free expert confidence weights with bounded Bernoulli EM",
+    )
+    calibrate.add_argument("--config", type=Path, required=True)
+    calibrate.add_argument("--config-output", type=Path, required=True)
+    calibrate.add_argument("--report", type=Path, required=True)
+    calibrate.add_argument("--positive-prior-alpha", type=float, default=1.0)
+    calibrate.add_argument("--positive-prior-beta", type=float, default=1.0)
+    calibrate.add_argument("--sensitivity-alpha", type=float, default=1.0)
+    calibrate.add_argument("--sensitivity-beta", type=float, default=1.0)
+    calibrate.add_argument("--false-positive-rate-alpha", type=float, default=1.0)
+    calibrate.add_argument("--false-positive-rate-beta", type=float, default=1.0)
+    calibrate.add_argument(
+        "--latent-output",
+        type=Path,
+        help="optional .npy path for the estimated latent mask probability field",
+    )
+    calibrate.add_argument("--tolerance", type=float, default=1e-6)
+    calibrate.add_argument("--max-iterations", type=int, default=100)
+    calibrate.add_argument("--max-samples", type=int, default=200_000)
+    calibrate.add_argument("--max-batch-pixels", type=int, default=8_000_000)
+    calibrate.add_argument("--seed", type=int, default=0)
+    calibrate.set_defaults(handler=_calibrate)
 
     void = subparsers.add_parser("void", help="execute Netflix VOID passes")
     void.add_argument("--config", type=Path, required=True)

@@ -67,6 +67,41 @@ def test_entropy_reweights_uncertain_expert_and_support_filters_outliers():
     assert np.array_equal(masks[0], np.array([[True, True], [False, False]]))
 
 
+def test_all_uncertain_panel_and_top_k_score_floor_fail_closed():
+    uncertain = np.zeros((3, 1, 2, 2))
+    specs = [spec("a"), spec("b"), spec("c")]
+    masks, probabilities, reports = fuse_batch(
+        uncertain,
+        specs,
+        FusionSpec(
+            mode="top_k",
+            top_k_ratio=1.0,
+            threshold=0.5,
+            min_expert_support=1,
+            support_threshold=0.5,
+            dynamic_weights="entropy",
+        ),
+    )
+    assert np.isfinite(probabilities).all()
+    assert not masks.any()
+    assert all(np.isfinite(list(report.values())).all() for report in reports)
+
+    weak_support = np.array([[[[0.51], [0.2]]], [[[-6.0], [-6.0]]], [[[-6.0], [-6.0]]]])
+    masks, _, _ = fuse_batch(
+        weak_support,
+        [spec("a"), spec("b"), spec("c")],
+        FusionSpec(
+            mode="top_k",
+            top_k_ratio=2.0,
+            threshold=0.5,
+            min_expert_support=1,
+            support_threshold=0.5,
+            dynamic_weights="static",
+        ),
+    )
+    assert not masks.any()
+
+
 def test_dynamic_batches_are_bounded_by_pixels():
     fusion = FusionSpec(batch_size=8, max_batch_pixels=8)
     batches = dynamic_batches(5, (5, 2, 2), fusion)
@@ -138,6 +173,7 @@ def test_run_ensemble_writes_video_and_report(tmp_path):
                     "dynamic_weights": "entropy",
                     "batch_size": 1,
                 },
+                "calibration": {"method": "test", "confidence_weights": {"first": 0.5}},
             }
         )
     )
@@ -147,6 +183,7 @@ def test_run_ensemble_writes_video_and_report(tmp_path):
     assert (tmp_path / "mask.mp4").is_file()
     saved_report = json.loads((tmp_path / "report.json").read_text())
     assert saved_report["experts"] == ["first", "second"]
+    assert saved_report["calibration"]["method"] == "test"
 
 
 def test_command_expert_rasterizes_normalized_regions(tmp_path):

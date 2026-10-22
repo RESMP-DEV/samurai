@@ -1,10 +1,10 @@
 # samurai, a VOID+Model toolkit
 
 `samurai` turns video inpainting into a reproducible multi-model execution
-system. It combines calibrated mask tensors from specialized segmentation
-models with coordinate regions from native multimodal models, fuses them as a
-weighted spatial ensemble, and converts the result into the exact four-value
-quadmask consumed by Netflix VOID.
+system. It combines aligned mask tensors from specialized segmentation models
+with coordinate regions from native multimodal models, fuses them as a weighted
+spatial ensemble, and converts the result into the exact four-value quadmask
+consumed by Netflix VOID.
 
 The project is model-neutral. SAM 3.1 is the default high-precision anchor, but
 the ensemble boundary accepts logits or probabilities from any model that can
@@ -35,10 +35,60 @@ Two complementary defenses suppress hallucinated regions:
   `support_threshold`.
 - `mode: "top_k"` selects the highest-scoring eligible pixels, with `top_k_ratio`
   interpreted as a pixel fraction when at most 1.0 and as an absolute pixel
-  count when greater than 1.0.
+  count when greater than 1.0. Top-k also enforces `threshold` as a minimum
+  fused score, so an area quota cannot promote weak evidence.
+
+If every expert reports exactly 0.5, entropy confidence is zero. Samurai falls
+back to the normalized configured weights and emits no mask under the 0.5 score
+floor rather than producing NaN weights or filling the top-k quota.
 
 The alternative `mode: "threshold"` emits every eligible pixel whose fused
 probability reaches `threshold`.
+
+## Label-free expert calibration
+
+The panel has no trusted weights and no ground-truth labels, so the default
+weights in an ensemble config are a configuration convenience, not a measured
+confidence. `samurai calibrate` replaces them with a measured scale.
+Calibration requires at least three aligned tensor experts; with only two
+label-free raters, skill and class polarity are not identifiable, so the CLI
+fails closed instead of producing unstable winner-take-all weights.
+
+The estimator is a bounded Dawid-Skene model over binary latent classes. Each
+expert report `p_k` becomes a sign `1[p_k >= 0.5]` with a confidence
+`|2 p_k - 1|`; every expert gets a fitted sensitivity (how often it agrees
+with the latent class when that class is positive) and a fitted false-positive
+rate (how often it claims positive when the latent class is negative). The
+expectation step uses the classic Dawid-Skene likelihood ratio scaled by each
+report's confidence, the maximisation step updates those rates and the prior
+with beta smoothing, and the loop stops on a tolerance or a maximum iteration
+count.
+
+The latent classes are exchangeable without labels. The positive class is
+oriented toward the panel's mean vote, while each expert's agreement and the
+first expert's anchor agreement are reported separately. That orientation is a
+documented convention, not ground truth and not a weight.
+
+```sh
+uv run samurai calibrate \
+  --config ensemble.json \
+  --config-output ensemble-calibrated.json \
+  --report calibration-report.json \
+  --latent-output latent-probabilities.npy
+```
+
+The generated config keeps every expert path, prompt, temperature, and the
+fusion block unchanged, and replaces only the weights with the normalized
+confidence scale. The report carries per-expert metrics (sensitivity, false
+positive rate, Youden J, latent agreement, Brier score), the normalized
+confidence weights, the latent positive fraction, and pairwise Dice, Brier,
+disagreement summaries. It also carries per-frame latent, support, and
+disagreement summaries plus SHA-256 provenance for the source config and every
+aligned expert tensor; the generated config preserves those hashes so a fused
+mask can be tied back to the exact calibration inputs.
+
+This measures inter-expert agreement. It is not a claim about real-model
+segmentation quality, and it does not touch VOID quadmask values.
 
 ## Dynamic batching
 
@@ -78,7 +128,8 @@ suite.
 
 1. Produce a SAM 3.1 probability-support tensor aligned to the input video.
 2. Add two or more tensor experts or command adapters in an ensemble config.
-3. Fuse the experts:
+3. Calibrate the panel when aligned tensor outputs are available.
+4. Fuse the experts:
 
 ```sh
 uv run samurai ensemble \
@@ -87,7 +138,6 @@ uv run samurai ensemble \
   --report ensemble-report.json
 ```
 
-4. Produce or ensemble an affected-region mask.
 5. Build the VOID sequence:
 
 ```sh
