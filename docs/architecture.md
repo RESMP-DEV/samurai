@@ -101,6 +101,8 @@ Source-verified facts that shape the implementation:
 | Similar-repository expansion | Research evidence records candidates | Add code only when it supplies a bounded executable capability |
 | NVFP4 low-precision lane | Source-verified candidate set recorded; native FP4 GEMM measured on SM120 at the models' own shapes, but W4A4 is required for the speedup and the FP4 weight error does not survive the mask decision boundary intact | Promote only after a real checkpoint is calibrated with trimmed activation amax, a W4A4 runtime replaces the dequantizing weight-only path, and mask agreement on real interaction cases is measured against a BF16 baseline |
 | Calibration corpus for the low-precision lane | No corpus defined yet | Define the frame and prompt set, the trimmed amax rule, and the accepted error budget before any quantized artifact is published |
+| Hosted SAM 3.1 lane | Meta Model API serves `sam-3.1` at `https://api.meta.ai/v1` over the OpenAI-compatible Responses API, returning boxes and binary masks per frame | Build the adapter and measure mask fidelity against the local SAM 3.1 lane on the same clips before preferring either path |
+| Quantization need at all | The full stack is 18.3 GB in BF16 and fits one 96 GB card, so quantization buys speed rather than capacity | Quantify real end-to-end throughput on the target host before investing in a quantized artifact |
 
 ## Delivery order
 
@@ -226,3 +228,72 @@ Source-verified facts that shape the implementation:
 - Evidence, per-component verdicts, and non-claims are consolidated in
   [quantization survey evidence](../evidence/quantization-survey-2026-10-21.json).
   No checkpoint was downloaded and no model was executed in this survey.
+
+### 2026-10-21, SAM 3.1 hosted API and checkpoint access survey
+
+- Established that Meta operates a first-party hosted API for SAM 3.1, the
+  Meta Model API, with model ID `sam-3.1`, base URL `https://api.meta.ai/v1`,
+  and the Responses API plus the Media segmentation endpoint. It is billed
+  per segmented image or frame, USD 2.50 per 1,000 images and USD 0.20 per
+  1,000 video frames, at a rate limit of 3,000 requests per minute per team.
+  Client libraries exist for parsing the mask grammar, including the
+  zero-dependency Python package `meta_sam_parser`.
+- Established that the official `facebook/sam3.1` checkpoint repository is
+  manually gated and this account is not on the authorized list, so the
+  official weights remain unreadable here. Measured that the official
+  checkpoint is FP32: the archive carries only `FloatStorage` and
+  `ComplexFloatStorage`, with 874,365,676 elements at 4 bytes each matching
+  the tensor blob total inside the 3,502,755,717-byte file.
+- Surveyed third-party hosting. fal.ai lists SAM 3 only, as
+  `fal-ai/sam-3/image` plus `video`, `image-rle`, and `3d-objects`, at USD
+  0.005 per request, licensed commercial. Segmind lists `sam3-image` and
+  `sam3-video`. Replicate has no SAM 3 or SAM 3.1 page under any tested slug.
+  AWS Bedrock, Azure AI Foundry, Together, Fireworks, Novita, Wavespeed,
+  DeepInfra, and Workers AI showed no SAM 3.1 listing, though several of
+  those catalogs could not be enumerated without an API key.
+- Confirmed the SAM 2.1 fallback is fully open: four official ungated
+  Apache-2.0 repositories, `facebook/sam2.1-hiera-tiny`, `-small`,
+  `-base-plus`, and `-large`, each with `model.safetensors` and a matching
+  `.pt`, plus the same weights on Meta's own CDN at
+  `https://dl.fbaipublicfiles.com/segment_anything_2/092824/`. The official
+  SAM 2.1 safetensors are FP32.
+- Confirmed the SAM License, which governs both SAM 3 and SAM 3.1, is not
+  research-only and not non-commercial: it grants use, reproduction,
+  distribution, and modification with derivative works, requires attribution
+  only for published research, and restricts reverse engineering and
+  ITAR-controlled or military end uses. SAM 2.1 is Apache-2.0.
+- Recorded that pre-quantized third-party SAM 3.1 artifacts already exist, so
+  first-party quantization of SAM 3.1 is not required to obtain a low-precision
+  checkpoint: `unsloth/sam3.1` publishes BF16, INT8, INT8-ConvRot, and FP8
+  variants with publisher-reported mask IoU of 0.9971 to 0.9984 against BF16,
+  and further INT8/W4A4, NVFP4, FP8, FP16, and MLX conversions exist under
+  other orgs.
+- Evidence, exact file names and sizes, and non-claims are consolidated in
+  [SAM access terms evidence](../evidence/sam-api-checkpoint-access-2026-10-21.json).
+  No hosted endpoint was called and no checkpoint was downloaded or executed.
+
+### 2026-10-21, hosted SAM 3.1 lane identified
+
+- Corrected the working assumption that SAM 3.1 has no API. Meta operates the
+  Meta Model API and serves SAM 3.1 as model ID `sam-3.1` at
+  `https://api.meta.ai/v1`, over the same OpenAI-compatible Responses API that
+  the rest of Meta Model API uses. The endpoint was confirmed live by an
+  `invalid_api_key` response rather than a 404.
+- Recorded the contract: a short noun phrase plus an image or a video returns,
+  per frame, one box and one binary mask per matched object, in the
+  special-token text grammar. Video accepts MP4 and MOV with H.264, H.265, or
+  MPEG-4. Billed at USD 2.50 per 1,000 segmented images and USD 0.20 per 1,000
+  segmented frames, with a 3,000 requests-per-minute-per-team limit and no
+  token limit.
+- Noted that the response is already a binary raster, so a hosted lane can
+  enter the existing tensor-expert contract in `src/samurai/ensemble.py`
+  without a checkpoint, a CUDA host, or quantization work.
+- Recorded the independent correction that the VOID transformer dimensions are
+  42 layers at inner dim 3072 with 5.57B parameters, read from the live
+  checkpoint config rather than the local class defaults, and that VOID's
+  `model_cpu_offload_and_qfloat8` mode performs no FP8 compute because the
+  load dtype is undone by the immediate `weight_dtype` cast.
+- Evidence, verified facts, and non-claims are consolidated in
+  [SAM access terms evidence](../evidence/sam-api-checkpoint-access-2026-10-21.json).
+  No hosted endpoint was called with a credential and no checkpoint was
+  downloaded or executed.

@@ -238,7 +238,7 @@
     "quantization_support_found_in_upstream_source": "none",
     "support_detail": {
       "sam3": "no torchao, no modelopt, no llmcompressor, no torch.scaled_mm, no quantization_config, no observer or calibration code",
-      "void_model": "no torchao, no llmcompressor, no modelopt; the existing model_cpu_offload_and_qfloat8 mode is a naive weight cast to torch.float8_e4m3fn (videox_fun/utils/fp8_optimization.py:28-43) plus an autocast wrapper, with no FP8 tensor-core GEMM path",
+      "void_model": "no torchao, no llmcompressor, no modelopt, no scaled_mm. The model_cpu_offload_and_qfloat8 mode is not an FP8 compute path at all: predict_v2v.py:50 loads weights with torch_dtype=torch.float8_e4m3fn and then predict_v2v.py:53 immediately calls .to(weight_dtype), where weight_dtype is bfloat16 from config/quadmask_cogvideox.py:61, so the FP8 dtype is undone before the first forward. The convert_weight_dtype_wrapper applied at predict_v2v.py:153 is therefore a no-op that only adds overhead. The one place FP8 weights survive, videox_fun/ui/wan_fun_ui.py:124, is dead code because that module imports Wan classes that do not exist in this repository.",
       "sam2_third_party": "no quantize, int8, fp8, fp4, nvfp4, mxfp4, scaled_mm, bitsandbytes, torchao, fbgemm or modelopt anywhere in the tree"
     },
     "per_component": [
@@ -335,6 +335,11 @@
         "gemm_pct": 0.0,
         "nvfp4": "not applicable",
         "note": "hosted API; no local weights"
+      },
+      {
+        "component": "VOID Pass 1/2 transformer, actual checkpoint dimensions",
+        "source": "https://huggingface.co/alibaba-pai/CogVideoX-Fun-V1.5-5b-InP/resolve/main/transformer/config.json",
+        "note": "42 layers, 48 heads x 64 head_dim -> inner_dim 3072, out_channels 16, patch_size 2, patch_size_t 2, config in_channels 33, raised to 48 at runtime because config.video_model.use_vae_mask is True (videox_fun/models/cogvideox_transformer3d.py:699-703). The local class defaults describe CogVideoX-2B and are not authoritative for this checkpoint."
       }
     ]
   },
@@ -344,7 +349,17 @@
     "nvfp4_plausible_but_low_value": 2,
     "nvfp4_not_plausible": 5,
     "not_applicable": 2,
-    "note": "plausible = GEMM-dominated with 16-divisible dimensions and a measured native FP4 kernel at its shape"
+    "note": "plausible = GEMM-dominated with 16-divisible dimensions and a measured native FP4 kernel at its shape",
+    "existing_pretrained_artifacts": {
+      "sam3_1": [
+        "unsloth/sam3.1 (BF16, INT8, INT8-ConvRot, FP8; publisher-reported mask IoU 0.9971-0.9984 vs BF16)",
+        "Reza2kn/sam3.1-nvfp4-detector-no-language (NVFP4 detector, static_6 scale rule, null error report)",
+        "Sparknight/sam3.1-int8-int4-convrot (INT8 and W4A4)",
+        "Lutianming/SAM3.1-comfyui-fp8",
+        "Comfy-Org/sam3.1 (FP16), mlx-community/sam3.1-bf16, mlx-community/sam3-nvfp4"
+      ],
+      "note": "a first-party NVFP4 quantization of SAM 3.1 is therefore not required to obtain a low-precision checkpoint"
+    }
   },
   "access_findings": {
     "sam3_1_official_api": "no Meta-hosted or major-provider hosted SAM 3.1 inference endpoint found; the official checkpoint is the only sanctioned route",
@@ -418,5 +433,42 @@
     "The FP8 and NVFP4 error figures come from random-BF16 tensors, not from real model weights, so they bound the format's error floor rather than any particular layer's error.",
     "The SAM 3.1 source audit and the SAM 2 audit are static source readings at the pinned revisions; neither worker loaded a checkpoint.",
     "Hosted-API availability was researched from public model pages and the Hugging Face API, not by calling a provider endpoint."
+  ],
+  "hosted_api_finding": {
+    "headline": "Meta does host SAM 3.1 as a first-party API, contradicting the working assumption that no API exists",
+    "model_id": "sam-3.1",
+    "base_url": "https://api.meta.ai/v1",
+    "protocol": "OpenAI-compatible Responses API (POST /v1/responses)",
+    "endpoints": [
+      "Responses API",
+      "Media segmentation endpoint"
+    ],
+    "input": "short noun phrase plus an image or a video (H.264, H.265, or MPEG-4 container)",
+    "output": "one line per frame; each line carries a box and a binary mask per matched object",
+    "pricing": {
+      "image_segmentation_usd_per_1000_images": 2.5,
+      "video_segmentation_usd_per_1000_frames": 0.2
+    },
+    "rate_limits": {
+      "requests_per_minute_per_team": 3000,
+      "tokens_per_minute": null
+    },
+    "verification": [
+      "GET https://api.meta.ai/v1/models returned {\"error\":{\"code\":\"invalid_api_key\"}}, which proves the endpoint exists and is live rather than 404",
+      "https://dev.meta.ai/docs/models lists sam-3.1 with input 'Text prompt, image, video' and output 'Boxes and masks'",
+      "https://dev.meta.ai/docs/media-segmentation documents the streaming request shape with an OpenAI Python client pointed at https://api.meta.ai/v1",
+      "https://dev.meta.ai/docs/pricing-rate-limits lists sam-3.1 at 3000 RPM with no TPM limit, and bills image segmentation at $2.50 per 1000 images and video segmentation at $0.20 per 1000 frames"
+    ],
+    "significance_for_samurai": "The response carries binary rasters, so a hosted SAM 3.1 lane can feed the existing tensor-expert contract in src/samurai/ensemble.py directly, with no local checkpoint, no CUDA host, and no quantization work. The $0.20 per 1000 frames price makes whole-video segmentation cheap relative to a GPU run.",
+    "not_verified": [
+      "No hosted endpoint was called with a credential; no MODEL_API_KEY is present on this machine.",
+      "Mask fidelity, latency, and video-tracking stability were not observed.",
+      "fal.ai SAM 3, Segmind SAM 3, and the other third-party listings were documented by the worker but not independently re-verified here."
+    ]
+  },
+  "corrected_findings": [
+    "A source-only audit concluded that the VOID transformer parameter count could not be pinned because the checkpoint config was not reachable. The config was subsequently read directly from the live Hugging Face repo, which pins 42 layers at inner_dim 3072 and 5.57B parameters, and the safetensors header independently confirmed 5,571,094,144 parameters with 85.4% GEMM-shaped weights.",
+    "The qfloat8 finding was strengthened by execution: the FP8 load dtype is provably undone by the weight_dtype cast, so the path performs no FP8 compute.",
+    "The SAM 3.1 official checkpoint dtype was measured as FP32 rather than assumed; a third-party mirror republishes a file of identical byte length, and its NVFP4 artifact keeps the language backbone in FP32 while quantizing 54.0% of parameters."
   ]
 }

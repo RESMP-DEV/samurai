@@ -1,0 +1,144 @@
+{
+  "recorded_at": "2026-10-21T19:05:00-07:00",
+  "agent": "Codex",
+  "purpose": "Determine whether Meta SAM 3.1 (and the related SAM 3 and SAM 2.1) is obtainable as a hosted inference API or a downloadable public checkpoint, and record the exact access terms, file identities, and licenses for the samurai quantization decision.",
+  "query_date": "2026-10-21",
+  "tooling": {
+    "web_search": "exq search / exq jsearch / exq fetch, and curl https://r.jina.ai/<url>",
+    "hugging_face": "curl https://huggingface.co/api/models/... and hf CLI",
+    "note": "No built-in harness web search or web fetch tool was used."
+  },
+  "verified_facts": [
+    {
+      "claim": "Meta operates a first-party hosted API for SAM 3.1, named Meta Model API, with model ID 'sam-3.1', base URL https://api.meta.ai/v1, reached over the Responses API (POST /v1/responses) and the Media segmentation endpoint.",
+      "evidence": "https://dev.meta.ai/docs/models (model table row '| `sam-3.1` | Text prompt, image, video | Boxes and masks |'); https://dev.meta.ai/docs/media-segmentation (Python example with base_url=\"https://api.meta.ai/v1\", model=\"sam-3.1\"); https://dev.meta.ai/docs/cookbook/sam"
+    },
+    {
+      "claim": "Meta Model API pricing for SAM 3.1 is USD 2.50 per 1,000 images and USD 0.20 per 1,000 video frames, billed per segmented image or frame rather than per token; the model carries a rate limit of 3,000 requests per minute per team with no token-per-minute limit.",
+      "evidence": "https://dev.meta.ai/docs/pricing-rate-limits (SAM 3.1 pricing table; rate-limit table row '| `sam-3.1` | 3,000 | None |')"
+    },
+    {
+      "claim": "Meta Model API exposes SAM parsing client libraries, including a zero-dependency Python package `meta_sam_parser` (Python >= 3.10) that decodes the streamed special-token mask grammar.",
+      "evidence": "https://dev.meta.ai/docs/sam/client-libraries"
+    },
+    {
+      "claim": "The official `facebook/sam3.1` Hugging Face repository is gated with `gated: manual`, license tag `license:other`, cardData license 'other', pipeline_tag mask-generation, library_name checkpoint, and no Hugging Face Transformers integration. The repository exposes exactly one weight file, `sam3.1_multiplex.pt`, of 3,502,755,717 bytes.",
+      "evidence": "curl https://huggingface.co/api/models/facebook/sam3.1 (gated=\"manual\", siblings list); curl 'https://huggingface.co/api/models/facebook/sam3.1/tree/main?recursive=1' (file sam3.1_multiplex.pt size 3502755717)"
+    },
+    {
+      "claim": "Access to `facebook/sam3.1` is denied to the present Hugging Face account even when authenticated. An authenticated HEAD on the weight file returns HTTP 403 with x-error-code GatedRepo and the message 'Access to model facebook/sam3.1 is restricted and you are not in the authorized list.' The non-weight files LICENSE (7,352 bytes) and README.md (2,003 bytes) are readable through the API tree endpoint but their raw bodies are gated.",
+      "evidence": "curl -sIL -H \"Authorization: Bearer $TOKEN\" https://huggingface.co/facebook/sam3.1/resolve/main/sam3.1_multiplex.pt -> HTTP/2 403, x-error-code: GatedRepo; hf download facebook/sam3.1 LICENSE -> succeeded locally; hf download facebook/sam3.1 assets/sam3.1_diagram.png -> 'Error: Access denied. Model facebook/sam3.1 requires approval.'"
+    },
+    {
+      "claim": "The official SAM 3.1 checkpoint is stored as FP32, not BF16 or FP8. The torch archive `sam3.1_multiplex.pt` holds 1,623 storage blobs plus a 249,782-byte data.pkl. The pickle declares only FloatStorage and ComplexFloatStorage, with zero BFloat16Storage, HalfStorage, or DoubleStorage entries. The single storage record reports 874,365,676 elements at 4 bytes each = 3,497,462,704 bytes, which matches the sum of tensor blob bytes (3,502,181,296 including the data.pkl and metadata) inside the 3,502,755,717-byte archive.",
+      "evidence": "HTTP range reads of an identical byte-length public copy at https://huggingface.co/Reza2kn/sam3.1-nvfp4-detector-no-language/resolve/main/sam3.1_multiplex.pt (same 3,502,755,717-byte size; LFS oid 0567debeec80ba4ac6369540c6c248025283cb3ff2b92827509e57e2b3541cb6); pickle GLOBAL opcodes: FloatStorage 2, ComplexFloatStorage 1, BFloat16Storage 0, HalfStorage 0"
+    },
+    {
+      "claim": "The official `facebook/sam3` Hugging Face repository is also gated manual with license 'other'. It exposes `sam3.pt` (3,450,062,241 bytes) and `model.safetensors` (3,439,938,512 bytes) with FP32 parameters, 859,922,360 in total, all of dtype F32.",
+      "evidence": "curl https://huggingface.co/api/models/facebook/sam3/tree/main?recursive=1; curl 'https://huggingface.co/api/models/facebook/sam3?expand[]=safetensors' -> {\"F32\": 859922360}"
+    },
+    {
+      "claim": "No Hugging Face Inference Provider or Inference Endpoint mapping exists for either official repository. Both `facebook/sam3` and `facebook/sam3.1` return an empty `inferenceProviderMapping` object, so neither is routable through router.huggingface.co or the provider inference catalog.",
+      "evidence": "curl 'https://huggingface.co/api/models/facebook/sam3.1?expand[]=inferenceProviderMapping' -> {}; curl 'https://huggingface.co/api/models/facebook/sam3?expand[]=inferenceProviderMapping' -> {}; curl 'https://huggingface.co/api/models?search=sam&filter=inference-provider-mapping&limit=20' -> []"
+    },
+    {
+      "claim": "fal.ai hosts SAM 3 (not 3.1) under the endpoint id `fal-ai/sam-3/image` with sibling endpoints `fal-ai/sam-3/video`, `fal-ai/sam-3/image-rle`, and `fal-ai/sam-3/3d-objects`, priced at USD 0.005 per request, listed with licenseType commercial. No fal.ai endpoint exposes SAM 3.1: three separate catalog queries for 'sam 3.1', 'sam3', and 'segment-anything-3' each returned only fal-ai/sam-3/image.",
+      "evidence": "curl 'https://fal.ai/api/models?query=sam-3' -> id fal-ai/sam-3/image, pricingInfoOverride '$0.005 per request', licenseType commercial; curl -o /dev/null -w '%{http_code}' https://fal.ai/models/fal-ai/sam-3/{image,video,image-rle,3d-objects} -> 200 for each"
+    },
+    {
+      "claim": "Segmind lists SAM 3 under three public model pages: sam3-image, sam3-video, and sam3-objects, with no SAM 3.1 listing. No SAM 3.1 page was found in the Segmind catalog search for 'sam'.",
+      "evidence": "curl https://r.jina.ai/https://www.segmind.com/models?q=sam -> lists Sam3 Image, Sam3 Video, Sam 3D Object, Sam V2.1 Hiera Large, Sam V2 Image, Sam V2 Video, Sam Audio Large; no Sam 3.1 entry"
+    },
+    {
+      "claim": "Replicate has no SAM 3 or SAM 3.1 model page under any tested slug. `meta/sam-2` returns HTTP 200 while `meta/sam-3`, `meta/sam3`, `meta/sam-3.1`, `meta/sam-3-video`, and `zsxkib/sam3` all return HTTP 404.",
+      "evidence": "curl -o /dev/null -w '%{http_code}' against each replicate.com slug; Replicate collection page https://replicate.com/collections/ai-detect-objects recommends meta/sam-2 only"
+    },
+    {
+      "claim": "AWS Bedrock carries no SAM 3 or SAM 3.1 foundation model. The Meta section of the supported-models page lists only Llama 3 and Llama 4 variants. The public foundation-models JSON endpoint requires authorization (HTTP 403), so an authenticated enumeration was not possible.",
+      "evidence": "curl https://r.jina.ai/https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html (Meta section: Llama 4/3.3/3.2/3.1/3/2.1 only); curl https://bedrock.us-east-1.amazonaws.com/foundation-models -> {\"Message\":\"Authorization header is missing\"} HTTP 403"
+    },
+    {
+      "claim": "No SAM 3.1 entry was found in the Azure AI Foundry model catalog endpoint used, and the endpoint returned HTTP 404 for 'sam', 'sam3.1', 'sam2.1', and 'segment-anything' queries. The Hugging Face `facebook/sam3` card carries a `deploy:azure` tag, but no Azure-hosted SAM endpoint slug was confirmed.",
+      "evidence": "curl 'https://api.catalog.azureml.ms/asset-gallery/v1.0/models?search=sam&limit=5' -> HTTP 404; curl https://huggingface.co/api/models/facebook/sam3 -> tags include 'deploy:azure'"
+    },
+    {
+      "claim": "Together AI, Fireworks AI, Novita AI, Wavespeed, DeepInfra, and Cloudflare Workers AI could not be confirmed as listing SAM 3 or SAM 3.1. Their catalog endpoints either require an API key that is not present on this machine (Together 'Missing API key', Fireworks HTTP 401 UNAUTHORIZED, Novita v3/models HTTP 404 while v3/openai/models returns only LLM entries, Wavespeed api/models HTTP 404) or returned no SAM match in the public page scrape (DeepInfra, Wavespeed, Workers AI).",
+      "evidence": "curl https://api.together.xyz/v1/models -> 'Missing API key'; curl https://api.fireworks.ai/inference/v1/models -> HTTP 401; curl https://api.novita.ai/v3/models -> HTTP 404; curl https://api.novita.ai/v3/openai/models -> LLM ids only; curl https://api.wavespeed.ai/models -> HTTP 404; curl https://api.deepinfra.com/models -> no sam match"
+    },
+    {
+      "claim": "The SAM 2.1 checkpoints are open, ungated, and Apache-2.0 on Hugging Face, with four official repo ids: facebook/sam2.1-hiera-tiny, facebook/sam2.1-hiera-small, facebook/sam2.1-hiera-base-plus, facebook/sam2.1-hiera-large. Each ships a model.safetensors and a matching .pt checkpoint, plus the .yaml config.",
+      "evidence": "curl https://huggingface.co/api/models/facebook/sam2.1-hiera-large -> gated false, cardData.license 'apache-2.0'; per-repo tree listing gives model.safetensors 897,897,416 bytes and sam2.1_hiera_large.pt 898,083,611 bytes for large; base-plus 323,476,296 / 323,606,802; small 184,305,280 / 184,416,285; tiny 155,908,064 / 156,008,466"
+    },
+    {
+      "claim": "The same four SAM 2.1 weights are also downloadable without any Hugging Face account from Meta's own CDN at https://dl.fbaipublicfiles.com/segment_anything_2/092824/, with byte sizes identical to the HF copies.",
+      "evidence": "curl https://raw.githubusercontent.com/facebookresearch/sam2/main/checkpoints/download_ckpts.sh -> SAM2p1_BASE_URL=\"https://dl.fbaipublicfiles.com/segment_anything_2/092824\"; HEAD content-length values 156008466, 184416285, 323606802, 898083611"
+    },
+    {
+      "claim": "SAM 2.1 official safetensors are FP32: facebook/sam2.1-hiera-large reports 224,447,154 parameters, all dtype F32, and a direct safetensors header range read confirms 901 tensors all of dtype F32.",
+      "evidence": "curl 'https://huggingface.co/api/models/facebook/sam2.1-hiera-large?expand[]=safetensors' -> {\"F32\": 224447154}; HTTP range read of the safetensors header -> 901 tensors, dtypes {'F32': 901}"
+    },
+    {
+      "claim": "Third parties have published pre-quantized SAM 3.1 checkpoints on Hugging Face. The most complete is `unsloth/sam3.1` (ungated, license 'other', license_name sam-license), published 2026-10-20, which ships model.safetensors (BF16, 1,680,935,372 bytes), sam3.1-INT8.safetensors (992,371,564 bytes), sam3.1-INT8-ConvRot.safetensors (1,047,746,476 bytes), and sam3.1-FP8.safetensors (1,047,320,804 bytes). Its own card reports mask IoU against BF16 of 0.9984/0.9913 (INT8-ConvRot), 0.9976/0.9829 (INT8), and 0.9971/0.9805 (FP8) over 53 text prompts on 6 images.",
+      "evidence": "curl https://huggingface.co/api/models/unsloth/sam3.1/tree/main?recursive=1; safetensors header range reads: INT8 = {F32:313, BF16:1155, I8:626}, INT8-ConvRot = {F32:289, BF16:1179, I8:578}, FP8 = {F32:289, BF16:1179, F8_E4M3:289}; https://huggingface.co/unsloth/sam3.1/raw/main/README.md"
+    },
+    {
+      "claim": "Additional pre-quantized SAM 3.1 repositories exist: `Sparknight/sam3.1-int8-int4-convrot` (INT8 1,281,144,416 bytes and W4A4 1,048,158,672 bytes, license 'other', includes the SAM License file), `Reza2kn/sam3.1-nvfp4-detector-no-language` (nvfp4_model.safetensors 1,879,562,120 bytes plus an unmodified copy of the official sam3.1_multiplex.pt), `Lutianming/SAM3.1-comfyui-fp8` (sam3.1_multiplex_fp8_e4m3fn.safetensors, 928,808,612 bytes, dtypes {F16:1015, F8_E4M3:575}), `Comfy-Org/sam3.1` (checkpoints/sam3.1_multiplex_fp16.safetensors, F16 x1590), `mlx-community/sam3.1-bf16` and `appautomaton/sam3.1-multiplex-bf16-mlx` (BF16 MLX conversions), and `mlx-community/sam3-nvfp4` (F32 + U8 packed NVFP4).",
+      "evidence": "HF API tree listings and safetensors header range reads per repo, cited at https://huggingface.co/api/models/<repo>/tree/main?recursive=1"
+    },
+    {
+      "claim": "Pre-quantized SAM 3 and SAM 2.1 checkpoints also exist: `onnx-community/sam3-tracker-ONNX` (prompt encoder and mask decoder in int8, uint8, q4, q4f16, fp16, and bnb4), `mlx-community/sam3-nvfp4`, `wkentaro/sam3-onnx-models`, `robotflowlabs/sam2.1-hiera-large-int8` (model_int8.pt 220,628,487 bytes, apache-2.0), `onnx-community/sam2.1-hiera-{tiny,small,base-plus,large}-ONNX`, and `apple/coreml-sam2.1-{tiny,small,baseplus,large}` (CoreML FLOAT16 mlpackages, apache-2.0).",
+      "evidence": "HF API model search for 'sam3', 'sam3 fp8', 'sam3 int8', 'sam3 int4', 'sam3 nvfp4', 'sam3 onnx', and 'sam2.1' with tree listings per repo"
+    },
+    {
+      "claim": "The SAM License governs SAM 3 and SAM 3.1 weights. It is a non-exclusive, worldwide, non-transferable, royalty-free license that grants use, reproduction, distribution, and modification, including derivative works, with no commercial-use prohibition (the word 'commercial' does not appear in the license text), no research-only clause, and an attribution requirement only when publishing research results. It does prohibit reverse engineering and use for ITAR-controlled or Trade-Control-prohibited end uses including military or warfare purposes, nuclear industries, espionage, and weapons. Governing law is California.",
+      "evidence": "https://huggingface.co/facebook/sam3.1/raw/main/LICENSE and https://raw.githubusercontent.com/facebookresearch/sam3/main/LICENSE (identical text; 'SAM License', Last Updated: November 19, 2025); grep -c -i commercial on the file returns 0; section 1(b)(ii) and 1(b)(v) quoted"
+    },
+    {
+      "claim": "SAM 3.1 is not a separately licensed artifact from SAM 3. The `facebook/sam3.1` and `facebook/sam3` LICENSE files are byte-identical apart from the repository name in the access notice, and the SAM 3 GitHub README states 'This project is licensed under the SAM License'.",
+      "evidence": "diff of the two LICENSE files shows only the repo-name line differs; https://raw.githubusercontent.com/facebookresearch/sam3/main/README.md '## License' section"
+    },
+    {
+      "claim": "SAM 2.1 is licensed Apache-2.0, confirmed by the HF cardData license identifier on all four official repos and by the sam2 GitHub LICENSE file.",
+      "evidence": "curl https://huggingface.co/api/models/facebook/sam2.1-hiera-large -> cardData.license 'apache-2.0', tags ['license:apache-2.0']; https://raw.githubusercontent.com/facebookresearch/sam2/main/LICENSE begins 'Apache License Version 2.0, January 2004'"
+    },
+    {
+      "claim": "Meta's own hosted API is described as serving an open-weight model, and Meta links SAM 3.1 from its research blog alongside the checkpoint, the GitHub codebase, the paper arXiv:2511.16719, and the Segment Anything Playground at https://www.aidemos.meta.com/segment-anything.",
+      "evidence": "https://ai.meta.com/blog/segment-anything-model-3/ link block; https://dev.meta.ai/docs/overview ('an open-weight model from Meta, is also available on Model API')"
+    }
+  ],
+  "not_verified": [
+    "No request was ever sent to Meta Model API, fal.ai, Segmind, Replicate, or any other hosted endpoint. Availability, billing, and mask output are documented facts, not exercised behavior. No MODEL_API_KEY is configured on this machine.",
+    "Replicate, Together AI, Fireworks AI, Novita AI, Wavespeed, DeepInfra, Cloudflare Workers AI, and Vertex AI could not be fully enumerated because their catalogs require API keys that are absent or their public endpoints do not expose a model list. A keyed query could still reveal a SAM 3 or SAM 3.1 endpoint.",
+    "AWS Bedrock's foundation-model inventory was not read with credentials, so the absence of SAM was established from the public supported-models documentation rather than the live API.",
+    "Azure AI Foundry's catalog API returned HTTP 404 for every query shape tried; the `deploy:azure` tag on facebook/sam3 suggests an Azure deployment path exists, but no Azure-hosted SAM slug or endpoint was confirmed.",
+    "The official facebook/sam3.1 checkpoint was never downloaded, loaded, or executed. Its FP32 dtype was measured by HTTP range reads of the zip central directory and the data.pkl pickle stream of an identical byte-length public copy (Reza2kn/sam3.1-nvfp4-detector-no-language), not of the gated original. Byte-identity was inferred from the identical 3,502,755,717-byte size and LFS oid, not from a full-file hash comparison.",
+    "The official facebook/sam3 checkpoint weights were never downloaded; its FP32 dtype comes from the Hugging Face safetensors metadata API, which reports 859,922,360 F32 parameters.",
+    "No pre-quantized third-party checkpoint was downloaded, loaded, or benchmarked. Their dtypes were read from safetensors headers only, and the IoU figures quoted for unsloth/sam3.1 are that repository's own self-reported numbers, not independently reproduced.",
+    "Whether Meta Model API accepts commercial use of outputs, and the precise geographic or eligibility restrictions on the Model API account, were not confirmed; the public pages state only Standard mode content handling and per-team rate limits.",
+    "No GPU quantization work was performed and no mask quality was measured against real model output."
+  ],
+  "implementation_decisions": [
+    "A hosted Meta Model API path exists for SAM 3.1 at model ID 'sam-3.1', so a no-local-GPU lane is technically available for SAM 3.1 without quantization work; it is billed per segmented image or frame.",
+    "The locally-runnable SAM 3.1 path remains gated on Hugging Face approval. Until the account is in the authorized list, the official checkpoint cannot be fetched.",
+    "For a locally-runnable, license-clean, quantization-ready lane, SAM 2.1 remains the practical fallback: four official ungated Apache-2.0 repos, plus direct CDN downloads, plus a deep third-party quantization ecosystem (ONNX int8/q4, INT8, CoreML FP16, MLX, NVFP4).",
+    "Pre-quantized SAM 3.1 artifacts already exist on Hugging Face, so first-party quantization of SAM 3.1 is not strictly required to obtain a low-precision checkpoint; the unsloth INT8-ConvRot and FP8 variants are the best documented by the publisher."
+  ],
+  "sources": [
+    {"name": "Meta Model API models documentation", "url": "https://dev.meta.ai/docs/models", "observed": "Public documentation read 2026-10-21"},
+    {"name": "Meta Model API media segmentation guide", "url": "https://dev.meta.ai/docs/media-segmentation", "observed": "Public documentation read 2026-10-21"},
+    {"name": "Meta Model API pricing and rate limits", "url": "https://dev.meta.ai/docs/pricing-rate-limits", "observed": "Public documentation read 2026-10-21"},
+    {"name": "Meta SAM 3.1 model page", "url": "https://dev.meta.ai/models/sam-3-1", "observed": "Public documentation read 2026-10-21"},
+    {"name": "Meta SAM client libraries", "url": "https://dev.meta.ai/docs/sam/client-libraries", "observed": "Public documentation read 2026-10-21"},
+    {"name": "Meta SAM 3 research blog", "url": "https://ai.meta.com/blog/segment-anything-model-3/", "observed": "Public documentation read 2026-10-21"},
+    {"name": "SAM 3.1 release notes", "url": "https://raw.githubusercontent.com/facebookresearch/sam3/main/RELEASE_SAM3p1.md", "observed": "Public repository file read 2026-10-21"},
+    {"name": "SAM 3 GitHub LICENSE", "url": "https://raw.githubusercontent.com/facebookresearch/sam3/main/LICENSE", "observed": "Public repository file read 2026-10-21"},
+    {"name": "SAM 2 GitHub LICENSE", "url": "https://raw.githubusercontent.com/facebookresearch/sam2/main/LICENSE", "observed": "Public repository file read 2026-10-21"},
+    {"name": "SAM 2 checkpoint download script", "url": "https://raw.githubusercontent.com/facebookresearch/sam2/main/checkpoints/download_ckpts.sh", "observed": "Public repository file read 2026-10-21"},
+    {"name": "facebook/sam3.1 model API", "url": "https://huggingface.co/api/models/facebook/sam3.1", "observed": "Live API 2026-10-21"},
+    {"name": "facebook/sam3 model API", "url": "https://huggingface.co/api/models/facebook/sam3", "observed": "Live API 2026-10-21"},
+    {"name": "fal.ai model catalog API", "url": "https://fal.ai/api/models?query=sam-3", "observed": "Live API 2026-10-21"},
+    {"name": "Segmind model catalog", "url": "https://www.segmind.com/models?q=sam", "observed": "Public page read 2026-10-21"},
+    {"name": "AWS Bedrock supported models", "url": "https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html", "observed": "Public documentation read 2026-10-21"},
+    {"name": "unsloth/sam3.1 model card", "url": "https://huggingface.co/unsloth/sam3.1/raw/main/README.md", "observed": "Public model card read 2026-10-21"}
+  ]
+}
