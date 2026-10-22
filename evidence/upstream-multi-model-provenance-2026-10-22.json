@@ -1,0 +1,71 @@
+{
+  "recorded_at": "2026-10-22T11:10:00-07:00",
+  "agent": "Codex main session with two read-only MiniMax M3.1 Flash CCR audit workers",
+  "purpose": "Determine whether frozen original SAMURAI and Netflix VOID initially contained multi-model fusion, distinguishing intra-model feature/memory fusion and sequential heterogeneous pipelines from ensemble fusion of multiple models' mask estimates.",
+  "source": {
+    "revision": "9a3787e41be79b0bbfb0afeb4aea20169552a983",
+    "dirty": false
+  },
+  "samurai": {
+    "frozen_revision": "76ba195984892b0d1e3db5d9c9f90bb62175680a",
+    "method_introduced_upstream": "c17e4cecc0458889ede28dd81ceebe3db2191d92 (2024-11-20, init commit of samurai)",
+    "conclusion": "No multi-model fusion. Original SAMURAI adds a Kalman motion prior and memory-bank selection inside one SAM2 tracker.",
+    "evidence": [
+      "third_party/sam2/sam2/modeling/sam2_base.py:420-498 scores three masks from one SAM2 multimask decoder, combines model IoU with Kalman-predicted box IoU at line 474, then argmax-selects one candidate at line 475; it never averages masks or logits from multiple models.",
+      "third_party/sam2/sam2/modeling/sam2_base.py:663-680 selects prior memory frames from the same tracker using best_iou_score, object_score_logits, and kf_score.",
+      "third_party/sam2/sam2/modeling/sam2_base.py:631 and memory_encoder.py:120 use 'fuse/Fuser' for current-frame/memory or pixel/mask feature fusion inside one SAM2 network.",
+      "All inference call sites construct exactly one SAM2 predictor and load one checkpoint.",
+      "A frozen-tree text search found zero ensemble/expert/multi-model/consensus/voting/weighted-mask hits; samurai_mode was used as the positive search control.",
+      "Legacy train_script_distill.py has teacher/student scaffolding, but it is dead in this snapshot (missing actors/modules), belongs to legacy ARTrack/STARK training, and is training-time distillation rather than inference mask fusion."
+    ]
+  },
+  "void": {
+    "pinned_revision": "e3914f8f551dd4b880661991fd6b28cd1699a97a",
+    "initial_public_vlm_pipeline_commit": "fd90e40b5771cd8d1d4f54af0be134141adbdae1 (2026-03-30, Add files via upload)",
+    "conclusion": "No ensemble fusion, but the initial public release did contain a heterogeneous multi-stage mask reasoner: SAM2 primary segmentation, Gemini scene analysis, and SAM3-or-LangSAM affected-object segmentation, followed by deterministic semantic composition.",
+    "evidence": [
+      "At fd90e40, stage2_vlm_analysis.py line 31 defaults to gemini-3-pro-preview.",
+      "At fd90e40, stage3a_generate_grey_masks.py line 371 exposes an exclusive --segmentation-model choice of sam3 or langsam; it does not run both.",
+      "At fd90e40, stage4_combine_masks.py lines 23-53 maps two semantic channels into 0/63/127/255 with equality tests: primary-only, affected-only, and overlap.",
+      "The initial Stage 1 uses SAM2 point-prompted video tracking for the primary black mask; Stage 2 uses Gemini to identify affected objects; Stage 3 selects one mask model for affected regions; Stage 4 composes the channels.",
+      "Pinned videox_fun/utils/utils.py:378-381 reads one prepared quadmask_*.mp4 file and the inpainting pipeline conditions one CogVideoX/VOID model on that tensor; there is no mask probability ensemble.",
+      "VOID Pass 1/Pass 2 are sequentially trained generative checkpoints. Pass 2 initializes from Pass 1 warped latents and writes a refined output; it does not blend mask predictions from independent experts."
+    ]
+  },
+  "verification": [
+    {
+      "command": "rg -n -i 'ensemble|fusion|fuse|multi[- _]?model|expert|weighted.*(mask|score)|mask.*(average|vot|combin)|kalman|data associat' third_party",
+      "result": "Hits were intra-model feature/memory fusion, Kalman candidate selection, per-object compositing, or evaluation averaging; no multi-model mask ensemble."
+    },
+    {
+      "command": "gh api repos/yangchris11/samurai/commits?path=sam2%2Fsam2%2Fmodeling%2Fsam2_base.py",
+      "result": "Introduced by c17e4ce on 2024-11-20 and later modified by 47ebf452 and 33134184."
+    },
+    {
+      "command": "gh api repos/Netflix/void-model/commits?path=VLM-MASK-REASONER",
+      "result": "The complete VLM mask reasoner was introduced by fd90e40 on 2026-03-30."
+    },
+    {
+      "command": "gh api repos/Netflix/void-model/contents/<stage-file>?ref=fd90e40",
+      "result": "Live read-only GitHub blob checks confirmed Gemini, exclusive SAM3/LangSAM selection, and deterministic black/grey composition were present in the initial public commit."
+    }
+  ],
+  "worker_evidence": [
+    {
+      "run_dir": "/Users/kearm/.cache/ccr-worker-runs/20261022-110043-xyujwf0",
+      "served_route": "minimax,MiniMax-M3.1-Flash",
+      "outcome": "completed"
+    },
+    {
+      "run_dir": "/Users/kearm/.cache/ccr-worker-runs/20261022-110052-yltcwenu",
+      "served_route": "minimax,MiniMax-M3.1-Flash",
+      "outcome": "completed"
+    }
+  ],
+  "non_claims": [
+    "This is source and commit provenance research, not execution of SAMURAI or VOID.",
+    "No evidence is claimed about unpublished branches, deleted upstream history, or papers whose methods are absent from the audited source.",
+    "The VOID heterogeneous pipeline is not equivalent to samurai's ensemble: its models fill different semantic roles and do not independently estimate the same primary mask for weighted fusion.",
+    "The cached trampoline sam3_masks directory still lacks a durable live-model invocation receipt and was not counted as proof of a live SAM3 expert."
+  ]
+}

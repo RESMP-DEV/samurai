@@ -327,3 +327,25 @@ Source-verified facts that shape the implementation:
   [three-expert real-video pilot evidence](../evidence/three-expert-real-video-pilot-2026-10-22.json).
   This is a two-frame mechanism pilot, not a full-video quality claim; no SAM
   3.1 checkpoint or VOID generative model ran.
+
+### 2026-10-22, upstream multi-model provenance audit
+
+- Audited frozen original SAMURAI at `76ba1959` and its upstream history. The
+  2024-11-20 introduction added Kalman motion scoring and confidence-filtered
+  memory selection inside one SAM2 predictor. Its weighted term combines the
+  model's candidate IoU with a Kalman-predicted box IoU and then selects one of
+  three masks from the same decoder; it does not aggregate outputs from
+  multiple segmentation models.
+- Audited Netflix VOID at `e3914f8` and its initial 2026-03-30 public
+  `VLM-MASK-REASONER` commit. VOID did ship a heterogeneous multi-stage
+  pipeline: SAM2 primary tracking, Gemini affected-object reasoning, and an
+  exclusive SAM3-or-LangSAM affected-region mask lane. Stage 4 then maps the
+  primary and affected semantic channels into the exact quadmask values.
+- Therefore VOID had multi-model orchestration, but not ensemble fusion. No
+  upstream lane independently estimates the same primary mask and combines
+  probabilities, boxes, or logits across model families. VOID inference reads
+  one prepared quadmask and Pass 2 refines Pass 1 latents rather than blending
+  expert masks.
+- Exact source anchors, upstream commit IDs, worker provenance, and non-claims
+  are consolidated in
+  [upstream multi-model provenance evidence](../evidence/upstream-multi-model-provenance-2026-10-22.json).
